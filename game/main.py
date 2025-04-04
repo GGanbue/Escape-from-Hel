@@ -16,6 +16,9 @@ class Game:
         self.enemy_spritesheet = Spritesheet('img/32rogues/monsters.png')
 
         self.title_screen = TitleScreen(self)
+        pygame.mixer.init()
+        pygame.mixer.music.load('Macky Gee - Obsessive.mp3')
+        pygame.mixer.music.play(-1, 37)
 
     def createTilemap(self):
         for i, row in enumerate(tilemap):
@@ -46,6 +49,9 @@ class Game:
             if event.type == pygame.QUIT:
                 self.playing = False
                 self.running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    self.player.attack()
 
     def update(self):
         #game loop updates
@@ -60,6 +66,9 @@ class Game:
         #game loop draw
         self.screen.fill(BLACK)
         self.all_sprites.draw(self.screen)
+        for enemy in self.enemies:
+            enemy.draw_health_bar(self.screen)
+        self.player.draw_health_bar(self.screen)
         self.clock.tick(FPS)
         pygame.display.update()
 

@@ -14,6 +14,7 @@ class Spritesheet:
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, game, x, y):
+        super().__init__()
 
         self.game = game
         self._layer = PLAYER_LAYER
@@ -25,6 +26,9 @@ class Player(pygame.sprite.Sprite):
 
         self.x_change = 0
         self.y_change = 0
+
+        self.max_health = 100
+        self.health = self.max_health
 
         self.facing = 'left'
 
@@ -86,6 +90,35 @@ class Player(pygame.sprite.Sprite):
                         self.world_y = block_rect.bottom
                     self.y_change = 0
 
+    def take_damage(self, amount):
+        self.health -= amount
+        if self.health <= 0:
+            # Handle player death
+            self.game.playing = False  # End the game when player dies
+
+    def draw_health_bar(self, surface):
+        health_ratio = self.health / self.max_health
+        bar_width = TILESIZE
+        bar_height = 5
+        pygame.draw.rect(surface, RED, (self.rect.x, self.rect.y - 10, bar_width, bar_height))
+        pygame.draw.rect(surface, (0, 255, 0), (self.rect.x, self.rect.y - 10, bar_width * health_ratio, bar_height))
+
+    def attack(self):
+        # Get mouse position
+        mouse_pos = pygame.mouse.get_pos()
+
+        # Convert screen position to world position
+        world_mouse_x = mouse_pos[0] + self.game.camera_offset_x
+        world_mouse_y = mouse_pos[1] + self.game.camera_offset_y
+
+        # Calculate direction to mouse
+        dx = world_mouse_x - self.world_x
+        dy = world_mouse_y - self.world_y
+        direction = math.atan2(dy, dx)
+
+        # Create attack object
+        Attack(self.game, self.world_x + TILESIZE / 2, self.world_y + TILESIZE / 2, direction)
+
 
 class Block(pygame.sprite.Sprite):
     def __init__(self, game, x, y):
@@ -119,6 +152,8 @@ class Ground(pygame.sprite.Sprite):
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, game, x, y):
+        super().__init__()
+
         self.game = game
         self._layer = ENEMY_LAYER
         self.groups = self.game.all_sprites, self.game.enemies
@@ -132,6 +167,9 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
         self.image = self.game.enemy_spritesheet.get_sprite(64, 0, TILESIZE, TILESIZE)
         self.image.set_colorkey(BLACK)
+
+        self.max_health = 50
+        self.health = self.max_health
 
         self.path = []
         self.path_index = 0
@@ -161,6 +199,15 @@ class Enemy(pygame.sprite.Sprite):
 
         self.x_change = 0
         self.y_change = 0
+
+        player_rect = pygame.Rect(self.game.player.world_x, self.game.player.world_y, TILESIZE, TILESIZE)
+        enemy_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
+
+        if enemy_rect.colliderect(player_rect):
+            current_time = pygame.time.get_ticks()
+            if not hasattr(self, 'last_attack_time') or current_time - self.last_attack_time > 1000:
+                self.last_attack_time = current_time
+                self.game.player.take_damage(10)  # Damage amount
 
     def detect_and_handle_corner_stuck(self, prev_x, prev_y):
         if not hasattr(self, 'stuck_count'):
@@ -421,3 +468,83 @@ class Enemy(pygame.sprite.Sprite):
         if speed > ENEMY_SPEED:
             self.x_change = (self.x_change / speed) * ENEMY_SPEED
             self.y_change = (self.y_change / speed) * ENEMY_SPEED
+
+    def take_damage(self, amount):
+        self.health -= amount
+        if self.health <= 0:
+            self.kill()  # Remove the enemy sprite when health reaches 0
+
+    def draw_health_bar(self, surface):
+        health_ratio = self.health / self.max_health
+        bar_width = TILESIZE
+        bar_height = 5
+        pygame.draw.rect(surface, RED, (self.rect.x, self.rect.y - 10, bar_width, bar_height))
+        pygame.draw.rect(surface, (0, 255, 0), (self.rect.x, self.rect.y - 10, bar_width * health_ratio, bar_height))
+
+
+class Attack(pygame.sprite.Sprite):
+    def __init__(self, game, x, y, direction):
+        self._layer = PLAYER_LAYER
+        self.groups = game.all_sprites, game.attacks
+        pygame.sprite.Sprite.__init__(self, self.groups)
+
+        self.game = game
+        self.world_x = x
+        self.world_y = y
+        self.direction = direction  # Angle in radians
+
+        # Create an arc-shaped attack area
+        self.radius = TILESIZE * 1.5
+        self.arc_width = math.pi / 2  # 90-degree arc
+        self.lifetime = 200  # milliseconds
+        self.damage = 25
+        self.creation_time = pygame.time.get_ticks()
+
+        # Create a surface for the attack visualization
+        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+
+        # Draw the arc
+        start_angle = self.direction - self.arc_width / 2
+        end_angle = self.direction + self.arc_width / 2
+        pygame.draw.arc(self.image, (255, 255, 255, 128),
+                        (0, 0, self.radius * 2, self.radius * 2),
+                        start_angle, end_angle, width=self.radius)
+
+        # Store hitbox for collision detection
+        self.hitbox_points = []
+        for angle in numpy.linspace(start_angle, end_angle, 10):
+            self.hitbox_points.append((
+                x + math.cos(angle) * self.radius,
+                y + math.sin(angle) * self.radius
+            ))
+
+    def update(self):
+        # Check if attack lifetime is over
+        if pygame.time.get_ticks() - self.creation_time > self.lifetime:
+            self.kill()
+            return
+
+        # Update position with camera
+        self.rect.x = self.world_x - self.game.camera_offset_x - self.radius
+        self.rect.y = self.world_y - self.game.camera_offset_y - self.radius
+
+        # Check for collisions with enemies
+        for enemy in self.game.enemies:
+            enemy_center = (enemy.world_x + TILESIZE / 2, enemy.world_y + TILESIZE / 2)
+            distance = math.sqrt((enemy_center[0] - self.world_x) ** 2 +
+                                 (enemy_center[1] - self.world_y) ** 2)
+
+            # Check if enemy is within radius
+            if distance <= self.radius:
+                # Check if enemy is within arc
+                angle_to_enemy = math.atan2(enemy_center[1] - self.world_y,
+                                            enemy_center[0] - self.world_x)
+
+                # Normalize angle difference
+                angle_diff = (angle_to_enemy - self.direction) % (2 * math.pi)
+                if angle_diff > math.pi:
+                    angle_diff = 2 * math.pi - angle_diff
+
+                if angle_diff <= self.arc_width / 2:
+                    enemy.take_damage(self.damage)
