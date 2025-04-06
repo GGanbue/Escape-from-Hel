@@ -1,6 +1,7 @@
 import pygame, sys, random
 from config import *
 from sprites import *
+from items import initialize_items
 
 
 class Game:
@@ -18,6 +19,7 @@ class Game:
         self.terrain_spritesheet = Spritesheet('img/32rogues/tiles.png')
         self.enemy_spritesheet = Spritesheet('img/32rogues/monsters.png')
         self.item_spritesheet = Spritesheet('img/32rogues/items.png')
+        self.alt_item_spritesheet = Spritesheet('img/32rogues/items-palette-swaps.png')
         self.fireball = Spritesheet('img/shot_fireball.png')
 
         self.block_textures = {
@@ -58,6 +60,7 @@ class Game:
         self.ui = UI(self)
         self.gold = 0
         self.wave = 1
+        self.weapons, self.armors = initialize_items(self)
 
     def createTilemap(self, tilemap=None):
         if tilemap is None:
@@ -146,21 +149,28 @@ class Game:
         for enemy in self.enemies:
             enemy.kill()
 
+        player_level = self.game_state.player_level
+
         if wave == 5:
             boss_x = 15
             boss_y = 8
             boss_texture = self.boss_textures.get(level, self.boss_textures[1])
+            boss_level = min(50,player_level + 5)
 
-            boss = Enemy(self, boss_x, boss_y, boss_texture)
-            boss.max_health = 300
+            boss = Enemy(self, boss_x, boss_y, boss_texture, level=boss_level)
+            boss.max_health = 500 + (level * 70)
             boss.health = boss.max_health
+            boss.base_damage = 20
+            boss.damage = int(boss.base_damage * (1 + (boss.level * 0.15)))
+            boss.max_speed = ENEMY_SPEED * 1.5
         else:
             enemy_texture = self.enemy_textures.get(level, self.enemy_textures[1])
             num_enemies = 4 + wave
+            enemy_level = min(50, player_level + random.randint(-1, 2))
             for _ in range(num_enemies):
                 valid_pos = self.find_valid_position()
                 if valid_pos:
-                    Enemy(self, valid_pos[0], valid_pos[1], enemy_texture)
+                    Enemy(self, valid_pos[0], valid_pos[1], enemy_texture, level=enemy_level)
 
         self.game_state.current_wave = wave
         self.ui.wave = wave
@@ -229,9 +239,20 @@ class Game:
             if event.type == pygame.QUIT:
                 self.playing = False
                 self.running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.pause_game()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     self.player.attack()
+
+    def pause_game(self):
+        pause_menu = PauseMenu(self)
+        pause_menu.run()
+        if hasattr(pause_menu, 'open_inventory') and pause_menu.open_inventory:
+            from items import InventoryScreen
+            inventory_screen = InventoryScreen(self)
+            inventory_screen.run()
 
     def update(self):
         self.all_sprites.update()
@@ -295,6 +316,149 @@ class GameState:
         self.max_waves_per_level = {1: 5, 2: 5, 3: 5, 4: 5, 5: 5}
         self.gold = 0
         self.max_level_reached = 1
+
+        # Player leveling attributes
+        self.player_level = 1
+        self.player_exp = 0
+        self.available_points = 0
+        self.health_points = 0
+        self.stamina_points = 0
+        self.damage_points = 0
+
+
+class PauseMenu:
+    def __init__(self, game):
+        self.game = game
+        self.running = True
+        self.font = pygame.font.Font(None, 36)
+        self.title_font = pygame.font.Font(None, 48)
+        self.selected_option = 0
+        self.options = ["Health", "Stamina", "Damage", "Inventory", "Resume Game"]
+        self.option_rects = []
+        self.open_inventory = False
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                self.game.running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False
+                elif event.key == pygame.K_UP:
+                    self.selected_option = (self.selected_option - 1) % len(self.options)
+                elif event.key == pygame.K_DOWN:
+                    self.selected_option = (self.selected_option + 1) % len(self.options)
+                elif event.key == pygame.K_RETURN:
+                    self.select_option()
+                elif event.key in [pygame.K_LEFT, pygame.K_RIGHT]:
+                    self.adjust_stat(event.key)
+
+    def adjust_stat(self, key):
+        if self.game.game_state.available_points <= 0 and key == pygame.K_RIGHT:
+            return  # No points to spend
+
+        if self.selected_option == 0:  # Health
+            if key == pygame.K_RIGHT:
+                self.game.game_state.health_points += 1
+                self.game.game_state.available_points -= 1
+                self.game.player.max_health += 10
+                self.game.player.health += 10
+            elif key == pygame.K_LEFT and self.game.game_state.health_points > 0:
+                self.game.game_state.health_points -= 1
+                self.game.game_state.available_points += 1
+                self.game.player.max_health -= 10
+                self.game.player.health = min(self.game.player.health, self.game.player.max_health)
+
+        elif self.selected_option == 1:  # Stamina
+            if key == pygame.K_RIGHT:
+                self.game.game_state.stamina_points += 1
+                self.game.game_state.available_points -= 1
+                self.game.player.max_stamina += 5
+            elif key == pygame.K_LEFT and self.game.game_state.stamina_points > 0:
+                self.game.game_state.stamina_points -= 1
+                self.game.game_state.available_points += 1
+                self.game.player.max_stamina -= 5
+                self.game.player.stamina = min(self.game.player.stamina, self.game.player.max_stamina)
+
+        elif self.selected_option == 2:  # Damage
+            if key == pygame.K_RIGHT:
+                self.game.game_state.damage_points += 1
+                self.game.game_state.available_points -= 1
+                self.game.player.damage += 2
+            elif key == pygame.K_LEFT and self.game.game_state.damage_points > 0:
+                self.game.game_state.damage_points -= 1
+                self.game.game_state.available_points += 1
+                self.game.player.damage -= 2
+
+    def select_option(self):
+        if self.options[self.selected_option] == "Resume Game":
+            self.running = False
+        elif self.options[self.selected_option] == "Inventory":
+            self.open_inventory = True
+            self.running = False
+
+    def draw(self):
+        # Create a semi-transparent overlay
+        overlay = pygame.Surface((WW, WH))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.game.screen.blit(overlay, (0, 0))
+
+        # Draw title
+        title_text = self.title_font.render("Character Stats", True, (255, 255, 255))
+        title_rect = title_text.get_rect(center=(WW // 2, 80))
+        self.game.screen.blit(title_text, title_rect)
+
+        # Draw player level and points
+        level_text = self.font.render(f"Level: {self.game.game_state.player_level}", True, (255, 255, 255))
+        self.game.screen.blit(level_text, (WW // 2 - 150, 130))
+
+        exp_text = self.font.render(f"EXP: {int(self.game.player.exp)}/{int(self.game.player.exp_to_next_level)}", True,
+                                    (255, 255, 255))
+        self.game.screen.blit(exp_text, (WW // 2 + 50, 130))
+
+        points_text = self.font.render(f"Available Points: {self.game.game_state.available_points}", True,
+                                       (255, 215, 0))
+        self.game.screen.blit(points_text, (WW // 2 - points_text.get_width() // 2, 170))
+
+        # Draw stat options
+        self.option_rects = []
+        y_pos = 220
+        for i, option in enumerate(self.options):
+            color = (255, 255, 0) if i == self.selected_option else (255, 255, 255)
+
+            if i < 3:  # Stats options
+                if i == 0:
+                    value = self.game.game_state.health_points
+                    effect = f"(Health: {self.game.player.max_health})"
+                elif i == 1:
+                    value = self.game.game_state.stamina_points
+                    effect = f"(Stamina: {self.game.player.max_stamina})"
+                else:
+                    value = self.game.game_state.damage_points
+                    effect = f"(Damage: {self.game.player.damage})"
+
+                text = self.font.render(f"{option}: {value} {effect}", True, color)
+            else:
+                text = self.font.render(option, True, color)
+
+            rect = text.get_rect(center=(WW // 2, y_pos))
+            self.game.screen.blit(text, rect)
+            self.option_rects.append(rect)
+            y_pos += 50
+
+        # Draw controls hint
+        hint_text = self.font.render("Use ← → to adjust stats, ↑↓ to navigate", True, (200, 200, 200))
+        hint_rect = hint_text.get_rect(center=(WW // 2, WH - 50))
+        self.game.screen.blit(hint_text, hint_rect)
+
+        pygame.display.flip()
+
+    def run(self):
+        while self.running:
+            self.handle_events()
+            self.draw()
 
 
 class TitleScreen:

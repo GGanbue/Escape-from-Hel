@@ -28,17 +28,50 @@ class Player(pygame.sprite.Sprite):
         self.x_change = 0
         self.y_change = 0
 
-        self.max_health = 100
-        self.health = self.max_health
-        self.max_stamina = 100
-        self.stamina = self.max_stamina
-        self.stamina_regen_rate = 20
-
         self.facing = 'left'
 
         self.rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
         self.image = self.game.character_spritesheet.get_sprite(32, 128, TILESIZE, TILESIZE)
+
+        self.level = game.game_state.player_level
+        self.exp = game.game_state.player_exp
+        self.exp_to_next_level = 100 * (1 + (self.level * 0.5))
+
+        self.base_max_health = 100
+        self.base_max_stamina = 100
+        self.base_damage = 20
+
+        self.health_points = game.game_state.health_points
+        self.stamina_points = game.game_state.stamina_points
+        self.damage_points = game.game_state.damage_points
+
+        self.max_health = self.base_max_health + (self.health_points * 10)
+        self.health = self.max_health
+        self.max_stamina = self.base_max_stamina + (self.stamina_points * 5)
+        self.stamina = self.max_stamina
+        self.damage = self.base_damage + (self.damage_points * 2)
+        self.stamina_regen_rate = 20
+
+        self.player_class = 'mage'
+        self.inventory = []
+        self.equipped_weapon = None
+        self.equipped_armor = None
+
+    def gain_exp(self, amount):
+        self.exp += amount
+        if self.exp >= self.exp_to_next_level:
+            self.level_up()
+
+    def level_up(self):
+        self.exp -= self.exp_to_next_level
+        self.level += 1
+        self.game.game_state.player_level = self.level
+        self.game.game_state.available_points += 3
+        self.exp_to_next_level = 100 * (1 + (self.level * 0.5))
+
+        if self.exp >= self.exp_to_next_level:
+            self.level_up()
 
     def update(self):
         self.movement()
@@ -183,7 +216,7 @@ class Ground(pygame.sprite.Sprite):
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, game, x, y, image=None):
+    def __init__(self, game, x, y, image=None, level=None):
         super().__init__()
 
         self.game = game
@@ -205,8 +238,18 @@ class Enemy(pygame.sprite.Sprite):
 
         self.image.set_colorkey(BLACK)
 
-        self.max_health = 50
+        if level is None:
+            self.level = min(50, game.game_state.current_wave * 2 + (game.game_state.current_level - 1) * 5)
+        else:
+            self.level = level
+
+        self.gold_drop = self.level
+
+        self.base_health = 50
+        self.base_damage = 10
+        self.max_health = int(self.base_health * (1 + (self.level * 0.15)))
         self.health = self.max_health
+        self.damage = int(self.base_damage * (1 + (self.level * 0.1)))
 
         self.path = []
         self.path_index = 0
@@ -244,7 +287,7 @@ class Enemy(pygame.sprite.Sprite):
             current_time = pygame.time.get_ticks()
             if not hasattr(self, 'last_attack_time') or current_time - self.last_attack_time > 1000:
                 self.last_attack_time = current_time
-                self.game.player.take_damage(10)
+                self.game.player.take_damage(self.damage)
 
 
     def detect_and_handle_corner_stuck(self, prev_x, prev_y):
@@ -509,9 +552,36 @@ class Enemy(pygame.sprite.Sprite):
 
     def take_damage(self, amount):
         self.health -= amount
-        self.hit_flash = True
         self.hit_time = pygame.time.get_ticks()
         if self.health <= 0:
+            exp_reward = 10 + (self.level * 2)
+            if self.max_health > 299:
+                exp_reward *= 5
+
+                gold_drop = self.level * 5
+                self.game.gold += gold_drop
+
+                current_level = self.game.game_state.current_level
+                if current_level <= 5:
+                    player_class = self.game.player.player_class
+
+                    armor_index = current_level - 1
+                    if armor_index < len(self.game.armors[player_class]):
+                        self.game.player.inventory.append(self.game.armors[player_class][armor_index])
+
+                    weapon_index = (current_level - 1) * 2
+                    if random.random() < 0.5:
+                        weapon_to_drop = weapon_index
+                    else:
+                        weapon_to_drop = weapon_index + 1
+
+                    if weapon_to_drop < len(self.game.weapons[player_class]):
+                        self.game.player.inventory.append(self.game.weapons[player_class][weapon_to_drop])
+            else:
+                gold_drop = self.level
+                self.game.gold += gold_drop
+
+            self.game.player.gain_exp(exp_reward)
             self.kill()
 
     def draw_health_bar(self, surface):
@@ -520,6 +590,10 @@ class Enemy(pygame.sprite.Sprite):
         bar_height = 5
         pygame.draw.rect(surface, RED, (self.rect.x, self.rect.y - 10, bar_width, bar_height))
         pygame.draw.rect(surface, (0, 255, 0), (self.rect.x, self.rect.y - 10, bar_width * health_ratio, bar_height))
+
+        level_font = pygame.font.Font(None, 16)
+        level_text = level_font.render(f"Lvl {self.level}", True, (255, 255, 255))
+        surface.blit(level_text, (self.rect.x, self.rect.y - 25))
 
 
 class Attack(pygame.sprite.Sprite):
@@ -639,3 +713,19 @@ class UI:
         surface.blit(self.item_slot, (armor_slot_x, slots_y))
         armor_text = self.small_font.render("Armor", True, (200, 200, 200))
         surface.blit(armor_text, (armor_slot_x + 32 - armor_text.get_width() // 2, slots_y + 70))
+
+        exp_ratio = self.game.player.exp / self.game.player.exp_to_next_level
+        exp_bar_width = 200
+        exp_bar_height = 10
+        exp_bar_x = stamina_bar_x  # Reuse the same x position as stamina bar
+        exp_bar_y = stamina_bar_y + stamina_bar_height + 5  # Position it below stamina bar
+
+        # Draw background of exp bar
+        pygame.draw.rect(surface, (0, 0, 0), (exp_bar_x, exp_bar_y, exp_bar_width, exp_bar_height))
+        # Draw filled portion of exp bar
+        pygame.draw.rect(surface, (100, 100, 255), (exp_bar_x, exp_bar_y, exp_bar_width * exp_ratio, exp_bar_height))
+
+        # Add level text next to the exp bar
+        level_text = self.font.render(f"Level: {self.game.player.level}", True, (255, 255, 255))
+        surface.blit(level_text, (exp_bar_x - level_text.get_width() - 10, exp_bar_y))
+
