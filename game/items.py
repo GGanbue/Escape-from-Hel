@@ -18,9 +18,9 @@ class Weapon(Item):
 
 
 class Armor(Item):
-    def __init__(self, name, image, item_class, defense, level_req=1):
+    def __init__(self, name, image, item_class, health, level_req=1):
         super().__init__(name, image, item_class, level_req)
-        self.defense = defense
+        self.health = health
         self.type = "armor"
 
 
@@ -130,16 +130,41 @@ class InventoryScreen:
             item = self.game.player.inventory[self.selected_index]
 
             if self.game.player.level < item.level_req:
+                self.game.set_direct_notification(f"Level {item.level_req} required to equip {item.name}")
                 return
 
             if item.item_class != self.game.player.player_class:
+                self.game.set_direct_notification(f"Only {item.item_class}s can equip {item.name}")
                 return
 
             if item.type == "weapon":
-                self.game.player.equipped_weapon = item
-                self.game.player.damage = self.game.player.base_damage + item.damage
+                # Check if already equipped
+                if self.game.player.equipped_weapon == item:
+                    # Unequip
+                    self.game.player.equipped_weapon = None
+                    self.game.player.damage = self.game.player.base_damage
+                    self.game.set_direct_notification(f"Unequipped {item.name}")
+                else:
+                    # Equip
+                    self.game.player.equipped_weapon = item
+                    self.game.player.damage = self.game.player.base_damage + item.damage
+                    self.game.set_direct_notification(f"Equipped {item.name}")
+
             elif item.type == "armor":
-                self.game.player.equipped_armor = item
+                if self.game.player.equipped_armor == item:
+                    if self.game.player.equipped_armor:
+                        self.game.player.max_health -= self.game.player.equipped_armor.health
+                        self.game.player.health = min(self.game.player.health, self.game.player.max_health)
+                    self.game.player.equipped_armor = None
+                    self.game.set_direct_notification(f"Unequipped {item.name}")
+                else:
+                    if self.game.player.equipped_armor:
+                        self.game.player.max_health -= self.game.player.equipped_armor.health
+
+                    self.game.player.equipped_armor = item
+                    self.game.player.max_health += item.health
+                    self.game.player.health += item.health
+                    self.game.set_direct_notification(f"Equipped {item.name}")
 
     def draw(self):
         overlay = pygame.Surface((WW, WH))
@@ -149,6 +174,58 @@ class InventoryScreen:
 
         title_text = self.title_font.render("Inventory", True, (255, 255, 255))
         self.game.screen.blit(title_text, (WW // 2 - title_text.get_width() // 2, 30))
+
+        if not self.game.player.inventory:
+            empty_text = self.font.render("Inventory is empty", True, (200, 200, 200))
+            self.game.screen.blit(empty_text, (WW // 2 - empty_text.get_width() // 2, WH // 2))
+        else:
+            start_y = 100
+            for i in range(self.scroll_offset,
+                           min(self.scroll_offset + self.items_per_page, len(self.game.player.inventory))):
+                item = self.game.player.inventory[i]
+                bg_color = (100, 100, 255) if i == self.selected_index else (70, 70, 70)
+
+                # Draw item background
+                pygame.draw.rect(self.game.screen, bg_color,
+                                 (WW // 4, start_y + (i - self.scroll_offset) * 50, WW // 2, 40))
+
+                # Draw item name
+                item_text = self.font.render(f"{item.name}", True, (255, 255, 255))
+                self.game.screen.blit(item_text, (WW // 4 + 10, start_y + (i - self.scroll_offset) * 50 + 10))
+
+                # Draw item type and stats
+                if hasattr(item, 'damage'):
+                    stat_text = self.font.render(f"Damage: {item.damage}", True, (255, 200, 100))
+                elif hasattr(item, 'health'):
+                    stat_text = self.font.render(f"Health: {item.health}", True, (100, 200, 255))
+                else:
+                    stat_text = self.font.render("Item", True, (200, 200, 200))
+
+                self.game.screen.blit(stat_text, (WW // 2, start_y + (i - self.scroll_offset) * 50 + 10))
+
+            # Draw scroll indicators if needed
+            if self.scroll_offset > 0:
+                up_text = self.font.render("▲", True, (255, 255, 255))
+                self.game.screen.blit(up_text, (WW // 2, 70))
+
+            if self.scroll_offset + self.items_per_page < len(self.game.player.inventory):
+                down_text = self.font.render("▼", True, (255, 255, 255))
+                self.game.screen.blit(down_text, (WW // 2, start_y + self.items_per_page * 50 + 10))
+
+            # Draw equipped items
+        if self.game.player.equipped_weapon:
+            weapon_text = self.font.render(f"Equipped Weapon: {self.game.player.equipped_weapon.name}", True,
+                                           (255, 200, 100))
+            self.game.screen.blit(weapon_text, (50, WH - 80))
+
+        if self.game.player.equipped_armor:
+            armor_text = self.font.render(f"Equipped Armor: {self.game.player.equipped_armor.name}", True,
+                                          (100, 200, 255))
+            self.game.screen.blit(armor_text, (50, WH - 50))
+
+            # Draw controls hint
+        hint_text = self.font.render("↑↓: Navigate | Enter: Equip | ESC: Back", True, (200, 200, 200))
+        self.game.screen.blit(hint_text, (WW // 2 - hint_text.get_width() // 2, WH - 30))
 
         pygame.display.flip()
 

@@ -2,6 +2,8 @@ import pygame, math, random, numpy
 import pygame.gfxdraw
 from config import *
 from pathfinding import astar_pathfinding
+from main import Game
+
 
 class Spritesheet:
     def __init__(self, file):
@@ -551,13 +553,15 @@ class Enemy(pygame.sprite.Sprite):
             self.y_change = (self.y_change / speed) * ENEMY_SPEED
 
     def take_damage(self, amount):
+        was_boss = self.max_health >= 500
         self.health -= amount
         self.hit_time = pygame.time.get_ticks()
-        if self.health <= 0:
-            exp_reward = 10 + (self.level * 2)
-            if self.max_health > 299:
-                exp_reward *= 5
 
+        if self.health <= 0:
+            exp_reward = 50 + (self.level * 2)
+            if was_boss:  # Use the saved flag instead
+                self.game.set_direct_notification("GOD SLAIN     ITEMS ADDED", 1500)
+                exp_reward *= 5
                 gold_drop = self.level * 5
                 self.game.gold += gold_drop
 
@@ -565,10 +569,13 @@ class Enemy(pygame.sprite.Sprite):
                 if current_level <= 5:
                     player_class = self.game.player.player_class
 
+                    # Drop armor
                     armor_index = current_level - 1
                     if armor_index < len(self.game.armors[player_class]):
-                        self.game.player.inventory.append(self.game.armors[player_class][armor_index])
+                        item = self.game.armors[player_class][armor_index]
+                        self.game.player.inventory.append(item)
 
+                    # Drop weapon
                     weapon_index = (current_level - 1) * 2
                     if random.random() < 0.5:
                         weapon_to_drop = weapon_index
@@ -576,7 +583,8 @@ class Enemy(pygame.sprite.Sprite):
                         weapon_to_drop = weapon_index + 1
 
                     if weapon_to_drop < len(self.game.weapons[player_class]):
-                        self.game.player.inventory.append(self.game.weapons[player_class][weapon_to_drop])
+                        item = self.game.weapons[player_class][weapon_to_drop]
+                        self.game.player.inventory.append(item)
             else:
                 gold_drop = self.level
                 self.game.gold += gold_drop
@@ -616,7 +624,7 @@ class Attack(pygame.sprite.Sprite):
 
         self.direction = direction
         self.speed = 10
-        self.damage = 20
+        self.damage = 1000
 
     def update(self):
         self.world_x += math.cos(self.direction) * self.speed
@@ -670,6 +678,15 @@ class UI:
         self.stamina = 100
         self.weapon = None
         self.armor = None
+
+        self.message = ""
+        self.message_timer = 0
+        self.message_duration = 0
+
+    def show_message(self, text, duration):
+        self.message = text
+        self.message_timer = pygame.time.get_ticks()
+        self.message_duration = duration
 
     def draw(self, surface):
         health_ratio = self.game.player.health / self.game.player.max_health
@@ -728,4 +745,49 @@ class UI:
         # Add level text next to the exp bar
         level_text = self.font.render(f"Level: {self.game.player.level}", True, (255, 255, 255))
         surface.blit(level_text, (exp_bar_x - level_text.get_width() - 10, exp_bar_y))
+
+        current_time = pygame.time.get_ticks()
+        if self.message and current_time - self.message_timer < self.message_duration:
+            message_text = self.font.render(self.message, True, (255, 255, 255))
+            message_bg = pygame.Surface((message_text.get_width() + 20, message_text.get_height() + 10))
+            message_bg.set_alpha(180)
+            message_bg.fill((0, 0, 0))
+
+            x = WW // 2 - message_text.get_width() // 2
+            y = WH // 4
+
+            surface.blit(message_bg, (x - 10, y - 5))
+            surface.blit(message_text, (x, y))
+
+        weapon_slot_x = WW // 2 - 70
+        armor_slot_x = WW // 2 + 6
+        slots_y = WH - 80
+
+        # Draw empty slots
+        surface.blit(self.item_slot, (weapon_slot_x, slots_y))
+        surface.blit(self.item_slot, (armor_slot_x, slots_y))
+
+        # Draw equipped weapon
+        if self.game.player.equipped_weapon:
+            weapon_image = self.game.player.equipped_weapon.image
+            surface.blit(weapon_image, (weapon_slot_x + 32 - weapon_image.get_width() // 2,
+                                        slots_y + 32 - weapon_image.get_height() // 2))
+
+        # Draw equipped armor
+        if self.game.player.equipped_armor:
+            armor_image = self.game.player.equipped_armor.image
+            surface.blit(armor_image, (armor_slot_x + 32 - armor_image.get_width() // 2,
+                                       slots_y + 32 - armor_image.get_height() // 2))
+
+        # Draw labels
+        weapon_text = self.small_font.render("Weapon", True, (200, 200, 200))
+        surface.blit(weapon_text, (weapon_slot_x + 32 - weapon_text.get_width() // 2, slots_y + 70))
+
+        armor_text = self.small_font.render("Armor", True, (200, 200, 200))
+        surface.blit(armor_text, (armor_slot_x + 32 - armor_text.get_width() // 2, slots_y + 70))
+
+
+
+
+
 

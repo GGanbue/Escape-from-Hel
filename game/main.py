@@ -62,6 +62,15 @@ class Game:
         self.wave = 1
         self.weapons, self.armors = initialize_items(self)
 
+        self.wave_complete_timer = 0
+        self.wave_complete_delay = 0
+        self.wave_transition_pending = False
+        self.next_wave = 0
+
+        self.direct_notification = None
+        self.direct_notification_time = 0
+        self.direct_notification_duration = 0
+
     def createTilemap(self, tilemap=None):
         if tilemap is None:
             tilemap = level1_map
@@ -72,6 +81,23 @@ class Game:
                     Block(self, j, i, self.block_textures.get(self.current_level, self.block_textures[1]))
                 if column == 'P':
                     self.player = Player(self, j, i)
+
+    def set_direct_notification(self, text, duration=5000):
+        self.direct_notification = text
+        self.direct_notification_time = pygame.time.get_ticks()
+        self.direct_notification_duration = duration
+
+    def draw_direct_notification(self, surface):
+        if self.direct_notification:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.direct_notification_time < self.direct_notification_duration:
+                font = pygame.font.Font(None, 36)
+                text_surf = font.render(self.direct_notification, True, (255, 255, 0))
+                text_rect = text_surf.get_rect(center=(surface.get_width() // 2, 100))
+
+                surface.blit(text_surf, text_rect)
+            else:
+                self.direct_notification = None
 
     def new(self):
         if hasattr(self, 'all_sprites'):
@@ -87,6 +113,14 @@ class Game:
 
     def load_level(self, level_number):
         self.current_level = level_number
+        if hasattr(self, 'player'):
+            old_inventory = self.player.inventory.copy()
+            old_equipped_weapon = self.player.equipped_weapon
+            old_equipped_armor = self.player.equipped_armor
+        else:
+            old_inventory = []
+            old_equipped_weapon = None
+            old_equipped_armor = None
 
         if hasattr(self, 'all_sprites'):
             for sprite in self.all_sprites:
@@ -145,6 +179,14 @@ class Game:
         if level_number > self.game_state.max_level_reached:
             self.game_state.max_level_reached = level_number
 
+        if hasattr(self, 'player'):
+            self.player.inventory = old_inventory
+            self.player.equipped_weapon = old_equipped_weapon
+            self.player.equipped_armor = old_equipped_armor
+
+            if self.player.equipped_weapon:
+                self.player.damage = self.player.base_damage + self.player.equipped_weapon.damage
+
     def spawn_wave(self, level, wave):
         for enemy in self.enemies:
             enemy.kill()
@@ -166,7 +208,7 @@ class Game:
         else:
             enemy_texture = self.enemy_textures.get(level, self.enemy_textures[1])
             num_enemies = 4 + wave
-            enemy_level = min(50, player_level + random.randint(-1, 2))
+            enemy_level = wave * level + int(player_level / 2)
             for _ in range(num_enemies):
                 valid_pos = self.find_valid_position()
                 if valid_pos:
@@ -219,20 +261,21 @@ class Game:
         return None
 
     def check_wave_complete(self):
-        if len(self.enemies) == 0 and self.playing:
-            if self.game_state.current_wave < self.game_state.max_waves_per_level.get(self.game_state.current_level, 1):
-                next_wave = self.game_state.current_wave + 1
+        if len(self.enemies) == 0 and self.playing and not self.wave_transition_pending:
+            self.wave_transition_pending = True
 
-                if next_wave == 5:
-                    self.game_state.current_wave = next_wave
-                    self.load_level(self.game_state.current_level)
+            if self.game_state.current_wave < self.game_state.max_waves_per_level.get(self.game_state.current_level, 5):
+                self.next_wave = self.game_state.current_wave + 1
+
+                if self.next_wave == 5:
+                    self.wave_complete_delay = 3000
                 else:
-                    self.game_state.current_wave = next_wave
-                    self.spawn_wave(self.game_state.current_level, self.game_state.current_wave)
+                    self.wave_complete_delay = 3000
             else:
-                self.game_state.current_level += 1
-                self.game_state.current_wave = 1
-                self.load_level(self.game_state.current_level)
+                self.next_wave = 1
+                self.wave_complete_delay = 5000
+
+            self.wave_complete_timer = pygame.time.get_ticks()
 
     def events(self):
         for event in pygame.event.get():
@@ -261,6 +304,23 @@ class Game:
         for sprite in self.all_sprites:
             sprite.rect.x = sprite.world_x - self.camera_offset_x
             sprite.rect.y = sprite.world_y - self.camera_offset_y
+
+        if self.wave_transition_pending:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.wave_complete_timer >= self.wave_complete_delay:
+                self.wave_transition_pending = False
+
+                if self.next_wave == 1:
+                    self.game_state.current_level += 1
+                    self.game_state.current_wave = 1
+                    self.load_level(self.game_state.current_level)
+                elif self.next_wave == 5:
+                    self.game_state.current_wave = self.next_wave
+                    self.load_level(self.game_state.current_level)
+                else:
+                    self.game_state.current_wave = self.next_wave
+                    self.spawn_wave(self.game_state.current_level, self.game_state.current_wave)
+
         self.check_wave_complete()
 
     def draw(self):
@@ -274,6 +334,7 @@ class Game:
         self.ui.gold = self.gold
         self.ui.wave = self.game_state.current_wave
         self.ui.draw(self.screen)
+        self.draw_direct_notification(self.screen)
         self.clock.tick(FPS)
         pygame.display.update()
 
@@ -506,7 +567,7 @@ class TitleScreen:
     def draw(self):
         self.game.screen.fill((0, 0, 0))
 
-        title_text = self.font.render("Escape from Maldo Goblin", True, (255, 255, 255))
+        title_text = self.font.render("Escape from Hel", True, (255, 255, 255))
         title_rect = title_text.get_rect(center=(self.game.screen.get_width() // 2, 100))
         self.game.screen.blit(title_text, title_rect)
 
