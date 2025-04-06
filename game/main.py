@@ -10,7 +10,7 @@ class Game:
         self.screen = pygame.display.set_mode((WW, WH))
         self.clock = pygame.time.Clock()
         self.running = True
-        pygame.display.set_caption("Escape from Maldo")
+        pygame.display.set_caption("Escape from Hel")
         if game_state is None:
             self.game_state = GameState()
         else:
@@ -21,6 +21,8 @@ class Game:
         self.item_spritesheet = Spritesheet('img/32rogues/items.png')
         self.alt_item_spritesheet = Spritesheet('img/32rogues/items-palette-swaps.png')
         self.fireball = Spritesheet('img/shot_fireball.png')
+        self.dagger = Spritesheet('rogue_skill4_frame4.png')
+        self.sword_swing = Spritesheet('rogue_skill2_frame2.png')
 
         self.block_textures = {
             1: self.terrain_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE),
@@ -54,6 +56,17 @@ class Game:
             5: self.enemy_spritesheet.get_sprite(0, 352, TILESIZE, TILESIZE)
         }
 
+        self.weapon_textures = {
+            'mage': self.fireball,
+            'warrior': self.item_spritesheet.get_sprite(32, 96, 32, 32),
+            'rogue': self.item_spritesheet.get_sprite(32, 0, 32, 32)  # Adjust coordinates to match your dagger sprite
+        }
+
+        self.warrior_attack_sprite = pygame.image.load("rogue_skill2_frame2.png").convert_alpha()
+        self.rogue_attack_sprite = pygame.image.load("rogue_skill4_frame4.png").convert_alpha()
+        self.mage_attack_sprite = pygame.image.load("img/shot_fireball.png").convert_alpha()
+
+
         self.title_screen = TitleScreen(self)
         self.game_over_screen = GameOverScreen(self)
         pygame.mixer.init()
@@ -80,7 +93,7 @@ class Game:
                 if column == 'B':
                     Block(self, j, i, self.block_textures.get(self.current_level, self.block_textures[1]))
                 if column == 'P':
-                    self.player = Player(self, j, i)
+                    self.player = Player(self, j, i, self.player_class)
 
     def set_direct_notification(self, text, duration=5000):
         self.direct_notification = text
@@ -108,6 +121,8 @@ class Game:
         self.blocks = pygame.sprite.LayeredUpdates()
         self.enemies = pygame.sprite.LayeredUpdates()
         self.attacks = pygame.sprite.LayeredUpdates()
+
+        self.player = Player(self, WW // 2, WH // 2, self.player_class)
 
         self.load_level(self.game_state.current_level)
 
@@ -175,7 +190,7 @@ class Game:
 
         self.spawn_wave(level_number, self.game_state.current_wave)
 
-        self.game_state.current_level = level_number
+        self.game_state.current_levels = level_number
         if level_number > self.game_state.max_level_reached:
             self.game_state.max_level_reached = level_number
 
@@ -185,7 +200,7 @@ class Game:
             self.player.equipped_armor = old_equipped_armor
 
             if self.player.equipped_weapon:
-                self.player.damage = self.player.base_damage + self.player.equipped_weapon.damage
+                self.player.damage = self.player.damage + self.player.equipped_weapon.damage
 
     def spawn_wave(self, level, wave):
         for enemy in self.enemies:
@@ -202,8 +217,8 @@ class Game:
             boss = Enemy(self, boss_x, boss_y, boss_texture, level=boss_level)
             boss.max_health = 500 + (level * 70)
             boss.health = boss.max_health
-            boss.base_damage = 20
-            boss.damage = int(boss.base_damage * (1 + (boss.level * 0.15)))
+            boss.damage = 20
+            boss.damage = int(boss.damage * (1 + (boss.level * 0.15)))
             boss.max_speed = ENEMY_SPEED * 1.5
         else:
             enemy_texture = self.enemy_textures.get(level, self.enemy_textures[1])
@@ -526,11 +541,8 @@ class TitleScreen:
     def __init__(self, game):
         self.game = game
         self.running = True
-        self.font = pygame.font.Font(None, 74)
-        self.menu_font = pygame.font.Font(None, 36)
-        self.selected_option = 0
-        self.options = ["Start Game", "Options", "Quit"]
-        self.option_rects = []
+        self.font = pygame.font.Font(None, 24)
+        self.title_font = pygame.font.Font(None, 48)
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -538,53 +550,129 @@ class TitleScreen:
                 self.running = False
                 self.game.running = False
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    self.selected_option = (self.selected_option - 1) % len(self.options)
-                elif event.key == pygame.K_DOWN:
-                    self.selected_option = (self.selected_option + 1) % len(self.options)
-                elif event.key == pygame.K_RETURN:
-                    self.select_option()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    self.handle_mouse_click(event.pos)
-
-    def handle_mouse_click(self, pos):
-        for i, rect in enumerate(self.option_rects):
-            if rect.collidepoint(pos):
-                self.selected_option = i
-                self.select_option()
-                break
-
-    def select_option(self):
-        if self.options[self.selected_option] == "Start Game":
-            self.running = False
-        elif self.options[self.selected_option] == "Options":
-            print("Options menu (to be implemented)")
-        elif self.options[self.selected_option] == "Quit":
-            self.running = False
-            self.game.running = False
+                if event.key == pygame.K_RETURN:
+                    self.running = False
+                    # Show class selection screen after pressing enter
+                    class_selection = ClassSelectionScreen(self.game)
+                    class_selection.run()
 
     def draw(self):
-        self.game.screen.fill((0, 0, 0))
+        self.game.screen.fill(BLACK)
 
-        title_text = self.font.render("Escape from Hel", True, (255, 255, 255))
-        title_rect = title_text.get_rect(center=(self.game.screen.get_width() // 2, 100))
+        # Draw title
+        title_text = self.title_font.render("RPG Adventure", True, WHITE)
+        title_rect = title_text.get_rect(center=(WW // 2, 200))
         self.game.screen.blit(title_text, title_rect)
 
-        self.option_rects = []
-        for i, option in enumerate(self.options):
-            color = (255, 255, 0) if i == self.selected_option else (255, 255, 255)
-            text = self.menu_font.render(option, True, color)
-            rect = text.get_rect(center=(self.game.screen.get_width() // 2, 250 + i * 50))
-            self.game.screen.blit(text, rect)
-            self.option_rects.append(rect)
+        # Draw instructions
+        instructions = self.font.render("Press ENTER to start", True, WHITE)
+        instructions_rect = instructions.get_rect(center=(WW // 2, WH - 100))
+        self.game.screen.blit(instructions, instructions_rect)
 
-        pygame.display.flip()
+        pygame.display.update()
 
     def run(self):
         while self.running:
             self.handle_events()
             self.draw()
+            self.game.clock.tick(FPS)
+
+class ClassSelectionScreen:
+    def __init__(self, game):
+        self.game = game
+        self.running = True
+        self.font = pygame.font.Font(None, 24)
+        self.title_font = pygame.font.Font(None, 36)
+        self.selected_class = 0
+        self.classes = [
+            {
+                'name': 'Mage',
+                'description': 'Magic user with ranged attacks and low health.',
+                'stats': {'health': 100, 'damage': 20, 'stamina': 120},
+                'image': None  # Will use your character spritesheet
+            },
+            {
+                'name': 'Warrior',
+                'description': 'High health melee fighter who can hit multiple enemies with axes and greatswords.',
+                'stats': {'health': 150, 'damage': 15, 'stamina': 100},
+                'image': None  # Will use your character spritesheet
+            },
+            {
+                'name': 'Rogue',
+                'description': 'Fast dagger-wielding fighter with high single-target damage.',
+                'stats': {'health': 120, 'damage': 18, 'stamina': 110},
+                'image': None  # Will use your character spritesheet
+            }
+        ]
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                self.game.running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    self.selected_class = (self.selected_class - 1) % len(self.classes)
+                if event.key == pygame.K_RIGHT:
+                    self.selected_class = (self.selected_class + 1) % len(self.classes)
+                if event.key == pygame.K_RETURN:
+                    self.game.player_class = self.classes[self.selected_class]['name'].lower()
+                    self.running = False
+
+    def draw(self):
+        self.game.screen.fill(BLACK)
+
+        title_text = self.title_font.render("Select Your Class", True, WHITE)
+        title_rect = title_text.get_rect(center=(WW // 2, 100))
+        self.game.screen.blit(title_text, title_rect)
+
+        for i, class_info in enumerate(self.classes):
+            box_color = BLUE if i == self.selected_class else LIGHTGREY
+            box_rect = pygame.Rect(WW // 2 - 150 + (i - 1) * 300, 200, 250, 300)
+            pygame.draw.rect(self.game.screen, box_color, box_rect, 0 if i == self.selected_class else 2)
+
+            name_text = self.font.render(class_info['name'], True, WHITE)
+            name_rect = name_text.get_rect(center=(box_rect.centerx, box_rect.top + 30))
+            self.game.screen.blit(name_text, name_rect)
+
+            y_offset = 80
+            for stat, value in class_info['stats'].items():
+                stat_text = self.font.render(f"{stat.capitalize()}: {value}", True, WHITE)
+                stat_rect = stat_text.get_rect(center=(box_rect.centerx, box_rect.top + y_offset))
+                self.game.screen.blit(stat_text, stat_rect)
+                y_offset += 30
+
+            words = class_info['description'].split()
+            lines = []
+            line = []
+            for word in words:
+                test_line = ' '.join(line + [word])
+                if self.font.size(test_line)[0] <= 230:
+                    line.append(word)
+                else:
+                    lines.append(' '.join(line))
+                    line = [word]
+            if line:
+                lines.append(' '.join(line))
+
+            for i, line in enumerate(lines):
+                desc_text = self.font.render(line, True, WHITE)
+                desc_rect = desc_text.get_rect(center=(box_rect.centerx, box_rect.top + 180 + i * 25))
+                self.game.screen.blit(desc_text, desc_rect)
+
+        instructions = self.font.render("Use arrow keys to select, Enter to confirm", True, WHITE)
+        instructions_rect = instructions.get_rect(center=(WW // 2, WH - 100))
+        self.game.screen.blit(instructions, instructions_rect)
+
+        pygame.display.update()
+
+    def run(self):
+        while self.running:
+            self.handle_events()
+            self.draw()
+            self.game.clock.tick(FPS)
+        return self.game.player_class
+
 
 class GameOverScreen:
     def __init__(self, game):

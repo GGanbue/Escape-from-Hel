@@ -1,7 +1,7 @@
 import random
 
-WW = 640
-WH = 480
+WW = 1280
+WH = 720
 TILESIZE = 32
 FPS = 60
 

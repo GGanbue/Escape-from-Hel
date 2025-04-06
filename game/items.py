@@ -142,12 +142,12 @@ class InventoryScreen:
                 if self.game.player.equipped_weapon == item:
                     # Unequip
                     self.game.player.equipped_weapon = None
-                    self.game.player.damage = self.game.player.base_damage
+                    self.game.player.damage = self.game.player.damage
                     self.game.set_direct_notification(f"Unequipped {item.name}")
                 else:
                     # Equip
                     self.game.player.equipped_weapon = item
-                    self.game.player.damage = self.game.player.base_damage + item.damage
+                    self.game.player.damage = self.game.player.damage + item.damage
                     self.game.set_direct_notification(f"Equipped {item.name}")
 
             elif item.type == "armor":

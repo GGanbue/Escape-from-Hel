@@ -16,7 +16,7 @@ class Spritesheet:
         return sprite
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, game, x, y):
+    def __init__(self, game, x, y, player_class):
         super().__init__()
 
         self.game = game
@@ -34,7 +34,40 @@ class Player(pygame.sprite.Sprite):
 
         self.rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
-        self.image = self.game.character_spritesheet.get_sprite(32, 128, TILESIZE, TILESIZE)
+        self.player_class = 'mage'
+        self.inventory = []
+        self.equipped_weapon = None
+        self.equipped_armor = None
+        self.projectile = None
+
+        self.player_class = player_class if player_class else 'mage'
+
+        if self.player_class == 'warrior':
+            self.max_health = 150
+            self.health = self.max_health
+            self.damage = 30
+            self.attack_cooldown = 800  # Slower attacks
+        elif self.player_class == 'mage':
+            self.max_health = 80
+            self.health = self.max_health
+            self.damage = 20
+            self.attack_cooldown = 100 # Medium speed attacks
+        elif self.player_class == 'rogue':
+            self.max_health = 100
+            self.health = self.max_health
+            self.damage = 40
+            self.attack_cooldown = 400  # Fast attacks
+
+        self.last_attack_time = 0
+
+        sprite_coordinates = {
+            "warrior": (0, 96),
+            "mage": (32, 128),
+            "rogue": (96, 0)
+        }
+
+        x, y = sprite_coordinates.get(self.player_class, (32, 128))
+        self.image = self.game.character_spritesheet.get_sprite(x, y, TILESIZE, TILESIZE)
 
         self.level = game.game_state.player_level
         self.exp = game.game_state.player_exp
@@ -42,7 +75,6 @@ class Player(pygame.sprite.Sprite):
 
         self.base_max_health = 100
         self.base_max_stamina = 100
-        self.base_damage = 20
 
         self.health_points = game.game_state.health_points
         self.stamina_points = game.game_state.stamina_points
@@ -52,13 +84,9 @@ class Player(pygame.sprite.Sprite):
         self.health = self.max_health
         self.max_stamina = self.base_max_stamina + (self.stamina_points * 5)
         self.stamina = self.max_stamina
-        self.damage = self.base_damage + (self.damage_points * 2)
+        self.damage = self.damage + (self.damage_points * 2)
         self.stamina_regen_rate = 20
 
-        self.player_class = 'mage'
-        self.inventory = []
-        self.equipped_weapon = None
-        self.equipped_armor = None
 
     def gain_exp(self, amount):
         self.exp += amount
@@ -90,6 +118,14 @@ class Player(pygame.sprite.Sprite):
             self.stamina += self.stamina_regen_rate * (1 / FPS)
             if self.stamina > self.max_stamina:
                 self.stamina = self.max_stamina
+
+        if self.projectile:
+            self.world_x += math.cos(self.direction) * self.speed
+            self.world_y += math.sin(self.direction) * self.speed
+
+            # Update screen coordinates based on world coordinates and camera offset
+            self.rect.centerx = self.world_x - self.game.camera_offset_x
+            self.rect.centery = self.world_y - self.game.camera_offset_y
 
         self.game.ui.stamina = self.stamina
         self.game.ui.max_stamina = self.max_stamina
@@ -161,24 +197,83 @@ class Player(pygame.sprite.Sprite):
 
     def attack(self):
         current_time = pygame.time.get_ticks()
-        if hasattr(self, 'last_attack_time') and current_time - self.last_attack_time < 50:
-            return
+        if current_time - self.last_attack_time >= self.attack_cooldown:
+            self.last_attack_time = current_time
 
-        self.last_attack_time = current_time
+            # Get the mouse position relative to the screen
+            mouse_x, mouse_y = pygame.mouse.get_pos()
 
-        mouse_pos = pygame.mouse.get_pos()
+            # Convert screen position to world position by adding camera offset
+            world_mouse_x = mouse_x + self.game.camera_offset_x
+            world_mouse_y = mouse_y + self.game.camera_offset_y
 
-        world_mouse_x = mouse_pos[0] + self.game.camera_offset_x
-        world_mouse_y = mouse_pos[1] + self.game.camera_offset_y
+            # Calculate direction vector from player to mouse
+            dir_x = world_mouse_x - self.world_x
+            dir_y = world_mouse_y - self.world_y
 
-        player_center_x = self.world_x + 16
-        player_center_y = self.world_y + 16
+            # Normalize the direction vector
+            length = max(1, math.sqrt(dir_x * dir_x + dir_y * dir_y))
+            dir_x = dir_x / length
+            dir_y = dir_y / length
 
-        dx = world_mouse_x - player_center_x
-        dy = world_mouse_y - player_center_y
-        direction = math.atan2(dy, dx)
+            # Calculate angle in radians from the direction vector
+            angle = math.atan2(dir_y, dir_x)
 
-        Attack(self.game, player_center_x, player_center_y, direction)
+
+            if self.player_class == 'mage':
+                attack = Attack(
+                    self.game,
+                    self.world_x,
+                    self.world_y,
+                    angle,
+                    self.game.fireball,
+                    "fireball",
+                    self.damage,
+                    projectile=True
+                )
+
+            elif self.player_class == 'warrior':
+                if self.facing == 'up':
+                    attack_x = self.world_x
+                    attack_y = self.world_y - TILESIZE / 2
+                elif self.facing == 'down':
+                    attack_x = self.world_x
+                    attack_y = self.world_y + TILESIZE / 2
+                elif self.facing == 'left':
+                    attack_x = self.world_x - TILESIZE / 2
+                    attack_y = self.world_y
+                elif self.facing == 'right':
+                    attack_x = self.world_x + TILESIZE / 2
+                    attack_y = self.world_y
+
+                attack = Attack(
+                    self.game,
+                    self.world_x + dir_x * TILESIZE / 2,  # Position slightly in front of player
+                    self.world_y + dir_y * TILESIZE / 2,
+                    angle,
+                    self.game.sword_swing,  # Needs to be defined in the Game class
+                    "sword_swing",
+                    self.damage,
+                    projectile=False,
+                    aoe=True,
+                    aoe_radius=TILESIZE / 1.5
+                )
+            elif self.player_class == 'rogue':
+                # Rogues use quick dagger strikes or thrown daggers
+                attack = Attack(
+                    self.game,
+                    self.world_x,
+                    self.world_y,
+                    angle,
+                    self.game.dagger,  # Needs to be defined in the Game class
+                    "dagger",
+                    self.damage,
+                    projectile=False
+                )
+                # Rogues can attack faster, so reduce cooldown temporarily
+                self.last_attack_time -= self.attack_cooldown * 0.2
+
+
 
 
 class Block(pygame.sprite.Sprite):
@@ -248,10 +343,10 @@ class Enemy(pygame.sprite.Sprite):
         self.gold_drop = self.level
 
         self.base_health = 50
-        self.base_damage = 10
+        self.damage = 10
         self.max_health = int(self.base_health * (1 + (self.level * 0.15)))
         self.health = self.max_health
-        self.damage = int(self.base_damage * (1 + (self.level * 0.1)))
+        self.damage = int(self.damage * (1 + (self.level * 0.1)))
 
         self.path = []
         self.path_index = 0
@@ -559,7 +654,7 @@ class Enemy(pygame.sprite.Sprite):
 
         if self.health <= 0:
             exp_reward = 50 + (self.level * 2)
-            if was_boss:  # Use the saved flag instead
+            if was_boss:
                 self.game.set_direct_notification("GOD SLAIN     ITEMS ADDED", 1500)
                 exp_reward *= 5
                 gold_drop = self.level * 5
@@ -605,7 +700,8 @@ class Enemy(pygame.sprite.Sprite):
 
 
 class Attack(pygame.sprite.Sprite):
-    def __init__(self, game, x, y, direction):
+    def __init__(self, game, x, y, direction, sprite_sheet, attack_type, damage, projectile=False, aoe=False,
+                 aoe_radius=0):
         super().__init__()
 
         self.game = game
@@ -615,46 +711,94 @@ class Attack(pygame.sprite.Sprite):
 
         self.world_x = x
         self.world_y = y
+        self.direction = direction
+        self.attack_type = attack_type
+        self.damage = damage
+        self.speed = 10
+        self.projectile = projectile
+        self.aoe = aoe
+        self.aoe_radius = aoe_radius
 
-        self.image = pygame.Surface((TILESIZE // 2, TILESIZE // 2))
-        self.image = self.game.fireball.get_sprite(0, 0, TILESIZE, TILESIZE)
-        self.image.set_colorkey(WHITE)
+        # Load the correct sprite based on attack_type
+        if attack_type == "sword_swing":
+            self.original_image = game.warrior_attack_sprite
+            self.original_image.set_colorkey(BLACK)
+        elif attack_type == "dagger":
+            self.original_image = game.rogue_attack_sprite
+            self.original_image.set_colorkey(BLACK)
+        else:
+            self.original_image = sprite_sheet.get_sprite(0, 0, TILESIZE, TILESIZE)
+            self.original_image.set_colorkey(WHITE)
+
+
+
+        # Rotate the image based on direction
+        angle_degrees = math.degrees(direction)
+        self.image = pygame.transform.rotate(self.original_image, -angle_degrees)
+
+        # Get the new rect after rotation
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
 
-        self.direction = direction
-        self.speed = 10
-        self.damage = 1000
+        # Set lifespan for attacks
+        self.creation_time = pygame.time.get_ticks()
+        if self.projectile:
+            self.lifespan = 1000  # Projectiles last 1 second
+        else:
+            self.lifespan = 200  # Melee attacks last 0.2 seconds
+
+        # For AOE attacks, create a larger collision rect
+        if self.aoe:
+            self.aoe_rect = pygame.Rect(0, 0, self.aoe_radius * 2, self.aoe_radius * 2)
+            self.aoe_rect.center = self.rect.center
 
     def update(self):
-        self.world_x += math.cos(self.direction) * self.speed
-        self.world_y += math.sin(self.direction) * self.speed
-
-        self.rect.x = self.world_x - self.game.camera_offset_x
-        self.rect.y = self.world_y - self.game.camera_offset_y
-
-        for block in self.game.blocks:
-            block_rect = pygame.Rect(block.world_x, block.world_y, TILESIZE, TILESIZE)
-            attack_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE // 2, TILESIZE // 2)
-
-            if attack_rect.colliderect(block_rect):
-                self.kill()
-                return
-
-        for enemy in self.game.enemies:
-            enemy_rect = pygame.Rect(enemy.world_x, enemy.world_y, TILESIZE, TILESIZE)
-            attack_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE // 2, TILESIZE // 2)
-
-            if attack_rect.colliderect(enemy_rect):
-                enemy.take_damage(self.damage)
-                enemy.hit_flash = True
-                enemy.hit_time = pygame.time.get_ticks()
-                self.kill()
-                return
-
-        if (abs(self.world_x - self.game.player.world_x) > WW or
-                abs(self.world_y - self.game.player.world_y) > WH):
+        # Check if attack should expire
+        if pygame.time.get_ticks() - self.creation_time > self.lifespan:
             self.kill()
+            return
+
+        # Move projectiles
+        if self.projectile:
+            self.world_x += math.cos(self.direction) * self.speed
+            self.world_y += math.sin(self.direction) * self.speed
+
+            # Update screen position based on world position and camera offset
+            screen_x = self.world_x - self.game.camera_offset_x
+            screen_y = self.world_y - self.game.camera_offset_y
+            self.rect.center = (screen_x, screen_y)
+
+            # Check for collisions with walls
+            for block in self.game.blocks:
+                if self.rect.colliderect(block.rect):
+                    self.kill()
+                    return
+
+        # Check for collisions with enemies
+        hits = []
+        for enemy in self.game.enemies:
+            if self.aoe:
+                # For AOE attacks, check if enemy is within the AOE radius
+                self.aoe_rect.center = (self.world_x - self.game.camera_offset_x,
+                                        self.world_y - self.game.camera_offset_y)
+                if self.aoe_rect.colliderect(enemy.rect):
+                    hits.append(enemy)
+            else:
+                # For regular attacks, check direct collision
+                if self.rect.colliderect(enemy.rect):
+                    hits.append(enemy)
+                    if not self.projectile:  # Melee attacks only hit once
+                        break
+
+        # Apply damage to enemies
+        for enemy in hits:
+            enemy.take_damage(self.damage)
+            if not self.aoe and not self.projectile:  # Melee attacks only hit once
+                self.kill()
+                return
+            elif self.projectile:  # Projectiles disappear after hitting
+                self.kill()
+                return
 
 
 class UI:
