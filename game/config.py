@@ -1,10 +1,14 @@
+# Configuration file for game settings, map generation, and level designs
+
 import random
 
+# Game window and display settings
 WW = 1280
 WH = 720
 TILESIZE = 32
 FPS = 60
 
+# Layer settings for sprite rendering order and speed settings
 PLAYER_LAYER = 4
 ENEMY_LAYER = 3
 BLOCK_LAYER = 2
@@ -12,6 +16,7 @@ GROUND_LAYER = 1
 PLAYER_SPEED = 3
 ENEMY_SPEED = 4
 
+# Color definitions (RGB format)
 RED = (255, 0, 0)
 BLACK = (0, 0, 0)
 BLUE = (0, 0, 255)
@@ -19,9 +24,10 @@ LIGHTGREY = (150, 150, 150)
 WHITE = (255, 255, 255)
 
 
-def generate_shaped_map(width, height, shape_type='rectangle'):
+def generate_shaped_map(width, height, shape_type='rectangle'): # Function to procedurally generate a game map with specified shape and obstacles
     map = [['B' for _ in range(width)] for _ in range(height)]
 
+    # Create the main playable area based on shape_type
     if shape_type == 'rectangle':
         for y in range(1, height - 1):
             for x in range(1, width - 1):
@@ -41,6 +47,7 @@ def generate_shaped_map(width, height, shape_type='rectangle'):
 
     num_shapes = random.randint(3, 7)
 
+    # Add random block shapes within the playable area
     for _ in range(num_shapes):
         attempts = 0
         while attempts < 100:
@@ -53,6 +60,7 @@ def generate_shaped_map(width, height, shape_type='rectangle'):
         if attempts >= 100:
             continue
 
+        # Chooses a random shape size
         shape_size = random.randint(10, 20)
         blocks_placed = 0
         blocks = [(start_x, start_y)]
@@ -84,7 +92,7 @@ def generate_shaped_map(width, height, shape_type='rectangle'):
 
     return [''.join(row) for row in map]
 
-
+# Define enemy spawn positions for different levels and waves
 level_waves = {
     1: {
         4: [
@@ -129,7 +137,7 @@ level_waves = {
 
 
 
-
+# Predefined map layout for level X boss fight
 level1_boss_map = [
     'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
     'B............................B',

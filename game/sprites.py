@@ -5,17 +5,17 @@ from pathfinding import astar_pathfinding
 from main import Game
 
 
-class Spritesheet:
+class Spritesheet: # Initialize a spritesheet object with the given image file
     def __init__(self, file):
         self.sheet = pygame.image.load(file).convert()
 
-    def get_sprite(self, x, y, width, height):
+    def get_sprite(self, x, y, width, height): # Extract a sprite from the spritesheet at the specified coordinates and dimensions
         sprite = pygame.Surface([width, height])
         sprite.blit(self.sheet, (0,0), (x, y, width, height))
         sprite.set_colorkey(BLACK)
         return sprite
 
-class Player(pygame.sprite.Sprite):
+class Player(pygame.sprite.Sprite): # Initialize the player character with position, class type, and base attributes
     def __init__(self, game, x, y, player_class):
         super().__init__()
 
@@ -50,7 +50,7 @@ class Player(pygame.sprite.Sprite):
         elif self.player_class == 'mage':
             self.max_health = 80
             self.health = self.max_health
-            self.damage = 1000
+            self.damage = 15
             self.attack_cooldown = 100
         elif self.player_class == 'rogue':
             self.max_health = 100
@@ -88,12 +88,12 @@ class Player(pygame.sprite.Sprite):
         self.stamina_regen_rate = 20
 
 
-    def gain_exp(self, amount):
+    def gain_exp(self, amount): # Add experience points to the player and check for level up
         self.exp += amount
         if self.exp >= self.exp_to_next_level:
             self.level_up()
 
-    def level_up(self):
+    def level_up(self): # Increase player level, reset exp, and grant stat points
         self.exp -= self.exp_to_next_level
         self.level += 1
         self.game.game_state.player_level = self.level
@@ -103,7 +103,7 @@ class Player(pygame.sprite.Sprite):
         if self.exp >= self.exp_to_next_level:
             self.level_up()
 
-    def update(self):
+    def update(self): # Update player position, handle collisions, and regenerate stamina
         self.movement()
 
         self.world_x += self.x_change
@@ -129,7 +129,7 @@ class Player(pygame.sprite.Sprite):
         self.game.ui.stamina = self.stamina
         self.game.ui.max_stamina = self.max_stamina
 
-    def movement(self):
+    def movement(self): # Handle player movement input and apply speed modifiers
         keys = pygame.key.get_pressed()
         new_facing = self.facing
         current_time = pygame.time.get_ticks()
@@ -161,7 +161,7 @@ class Player(pygame.sprite.Sprite):
             self.facing = new_facing
 
 
-    def collide_blocks(self, direction):
+    def collide_blocks(self, direction): # Check for collisions with blocks and adjust player position accordingly
         temp_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
         for block in self.game.blocks:
@@ -181,20 +181,20 @@ class Player(pygame.sprite.Sprite):
                         self.world_y = block_rect.bottom
                     self.y_change = 0
 
-    def take_damage(self, amount):
+    def take_damage(self, amount): # Reduce player health when damaged and check for death
         self.health -= amount
         if self.health <= 0:
             self.health = 0
             self.game.playing = False
 
-    def draw_health_bar(self, surface):
+    def draw_health_bar(self, surface): # Draw a health bar above the player
         health_ratio = self.health / self.max_health
         bar_width = TILESIZE
         bar_height = 5
         pygame.draw.rect(surface, RED, (self.rect.x, self.rect.y - 10, bar_width, bar_height))
         pygame.draw.rect(surface, (0, 255, 0), (self.rect.x, self.rect.y - 10, bar_width * health_ratio, bar_height))
 
-    def attack(self):
+    def attack(self): # Create an attack based on player class and mouse position
         current_time = pygame.time.get_ticks()
         if current_time - self.last_attack_time >= self.attack_cooldown:
             self.last_attack_time = current_time
@@ -268,7 +268,7 @@ class Player(pygame.sprite.Sprite):
 
 
 
-class Block(pygame.sprite.Sprite):
+class Block(pygame.sprite.Sprite): # Initialize a block/wall object at the specified position
     def __init__(self, game, x, y, image=None):
         self.game = game
         self._layer = BLOCK_LAYER
@@ -286,7 +286,7 @@ class Block(pygame.sprite.Sprite):
             self.image = self.game.terrain_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE)
 
 
-class Ground(pygame.sprite.Sprite):
+class Ground(pygame.sprite.Sprite): # Initialize a ground tile at the specified position
     def __init__(self, game, x, y, image=None):
         self.game = game
         self._layer = GROUND_LAYER
@@ -304,7 +304,7 @@ class Ground(pygame.sprite.Sprite):
             self.image = self.game.terrain_spritesheet.get_sprite(0, 192, TILESIZE, TILESIZE)
 
 
-class Enemy(pygame.sprite.Sprite):
+class Enemy(pygame.sprite.Sprite): # Initialize an enemy with position, image, and level-scaled attributes
     def __init__(self, game, x, y, image=None, level=None):
         super().__init__()
 
@@ -351,7 +351,7 @@ class Enemy(pygame.sprite.Sprite):
         self.deceleration = 0.1
         self.max_speed = ENEMY_SPEED
 
-    def update(self):
+    def update(self): # Update enemy position, handle collisions, and attack player on contact
         prev_x = self.world_x
         prev_y = self.world_y
         self.movement()
@@ -378,7 +378,7 @@ class Enemy(pygame.sprite.Sprite):
                 self.last_attack_time = current_time
                 self.game.player.take_damage(self.damage)
 
-    def detect_and_handle_corner_stuck(self, prev_x, prev_y):
+    def detect_and_handle_corner_stuck(self, prev_x, prev_y): # Detect when enemy is stuck on corners and adjust movement to free it
         if not hasattr(self, 'stuck_count'):
             self.stuck_count = 0
             self.last_stuck_time = 0
@@ -413,7 +413,7 @@ class Enemy(pygame.sprite.Sprite):
                 self.update_path()
                 self.path_update_time = current_time
 
-    def find_corner_adjustment_direction(self):
+    def find_corner_adjustment_direction(self): # Find a valid direction to move when stuck on a corner
         directions = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)]
         test_distance = TILESIZE * 2
 
@@ -456,7 +456,7 @@ class Enemy(pygame.sprite.Sprite):
         else:
             self.corner_adjustment_direction = (-self.velocity_x, -self.velocity_y)
 
-    def apply_corner_adjustment(self):
+    def apply_corner_adjustment(self): # Apply movement adjustments to free enemy from being stuck
         if self.corner_adjustment_direction:
             dx, dy = self.corner_adjustment_direction
 
@@ -475,7 +475,7 @@ class Enemy(pygame.sprite.Sprite):
                     self.world_y = valid_pos[1] * TILESIZE
                     self.stuck_count = 0
 
-    def movement(self):
+    def movement(self): # Handle enemy movement toward player using pathfinding or direct line of sight
         current_time = pygame.time.get_ticks()
 
         if not hasattr(self, 'previous_positions'):
@@ -539,7 +539,7 @@ class Enemy(pygame.sprite.Sprite):
         self.x_change = self.velocity_x
         self.y_change = self.velocity_y
 
-    def has_line_of_sight_to_player(self):
+    def has_line_of_sight_to_player(self): # Check if enemy has direct line of sight to the player without obstacles
         start_x = self.world_x + TILESIZE // 2
         start_y = self.world_y + TILESIZE // 2
         end_x = self.game.player.world_x + TILESIZE // 2
@@ -573,7 +573,7 @@ class Enemy(pygame.sprite.Sprite):
 
         return True
 
-    def update_path(self):
+    def update_path(self): # Calculate a new pathfinding route to the player
         grid = self.game.get_grid()
         start = (int(self.world_x // TILESIZE), int(self.world_y // TILESIZE))
         goal = (int(self.game.player.world_x // TILESIZE), int(self.game.player.world_y // TILESIZE))
@@ -581,7 +581,7 @@ class Enemy(pygame.sprite.Sprite):
         self.path = astar_pathfinding(start, goal, grid)
         self.path_index = 0
 
-    def collide_blocks(self, direction):
+    def collide_blocks(self, direction): # Handle collisions with blocks and adjust enemy position
         buffer = 2
         temp_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
@@ -604,7 +604,7 @@ class Enemy(pygame.sprite.Sprite):
                     self.y_change = 0
                     self.velocity_y = 0
 
-    def collide_enemies(self, direction):
+    def collide_enemies(self, direction): # Handle collisions with other enemies to prevent overlapping
         push_strength = 0.1
         separation_strength = 0.15
         collision_margin = TILESIZE * 0.8
@@ -636,7 +636,7 @@ class Enemy(pygame.sprite.Sprite):
             self.x_change = (self.x_change / speed) * ENEMY_SPEED
             self.y_change = (self.y_change / speed) * ENEMY_SPEED
 
-    def take_damage(self, amount):
+    def take_damage(self, amount): # Reduce enemy health when damaged and handle death rewards
         was_boss = self.max_health >= 500
         self.health -= amount
         self.hit_time = pygame.time.get_ticks()
@@ -674,7 +674,7 @@ class Enemy(pygame.sprite.Sprite):
             self.game.player.gain_exp(exp_reward)
             self.kill()
 
-    def draw_health_bar(self, surface):
+    def draw_health_bar(self, surface): # Draw a health bar and level indicator above the enemy
         health_ratio = self.health / self.max_health
         bar_width = TILESIZE
         bar_height = 5
@@ -686,7 +686,7 @@ class Enemy(pygame.sprite.Sprite):
         surface.blit(level_text, (self.rect.x, self.rect.y - 25))
 
 
-class Attack(pygame.sprite.Sprite):
+class Attack(pygame.sprite.Sprite): # Initialize an attack object with position, direction, and damage properties
     def __init__(self, game, x, y, direction, sprite_sheet, attack_type, damage, projectile=False, aoe=False,
                  aoe_radius=0):
         super().__init__()
@@ -734,7 +734,7 @@ class Attack(pygame.sprite.Sprite):
             self.aoe_rect = pygame.Rect(0, 0, self.aoe_radius * 2, self.aoe_radius * 2)
             self.aoe_rect.center = self.rect.center
 
-    def update(self):
+    def update(self): # Update attack position and check for collisions with enemies
         if pygame.time.get_ticks() - self.creation_time > self.lifespan:
             self.kill()
             return
@@ -770,7 +770,7 @@ class Attack(pygame.sprite.Sprite):
                 return
 
 
-class UI:
+class UI: # Initialize the user interface with fonts and display elements
     def __init__(self, game):
         self.game = game
         self.font = pygame.font.Font(None, 32)
@@ -796,12 +796,12 @@ class UI:
         self.message_timer = 0
         self.message_duration = 0
 
-    def show_message(self, text, duration):
+    def show_message(self, text, duration): # Display a temporary message on the screen
         self.message = text
         self.message_timer = pygame.time.get_ticks()
         self.message_duration = duration
 
-    def draw(self, surface):
+    def draw(self, surface): # Draw all UI elements including health/stamina bars, inventory, and messages
         health_ratio = self.game.player.health / self.game.player.max_health
         health_bar_width = 200
         health_bar_height = 20

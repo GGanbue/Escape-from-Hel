@@ -5,7 +5,7 @@ from items import initialize_items
 
 
 class Game:
-    def __init__(self, game_state=None):
+    def __init__(self, game_state=None): # Initialize the game, set up display, load assets, and prepare game state
         pygame.init()
         self.screen = pygame.display.set_mode((WW, WH))
         self.clock = pygame.time.Clock()
@@ -84,7 +84,7 @@ class Game:
         self.direct_notification_time = 0
         self.direct_notification_duration = 0
 
-    def createTilemap(self, tilemap=None):
+    def createTilemap(self, tilemap=None): # Create the game map from a tilemap array, placing ground, blocks and player
         if tilemap is None:
             tilemap = level1_map
         for i, row in enumerate(tilemap):
@@ -95,12 +95,12 @@ class Game:
                 if column == 'P':
                     self.player = Player(self, j, i, self.player_class)
 
-    def set_direct_notification(self, text, duration=5000):
+    def set_direct_notification(self, text, duration=5000): # Set up an on-screen notification with specified text and duration
         self.direct_notification = text
         self.direct_notification_time = pygame.time.get_ticks()
         self.direct_notification_duration = duration
 
-    def draw_direct_notification(self, surface):
+    def draw_direct_notification(self, surface): # Draw active notification messages on the screen if they haven't expired
         if self.direct_notification:
             current_time = pygame.time.get_ticks()
             if current_time - self.direct_notification_time < self.direct_notification_duration:
@@ -112,7 +112,7 @@ class Game:
             else:
                 self.direct_notification = None
 
-    def new(self):
+    def new(self): # Start a new game or reset the current game state
         if hasattr(self, 'all_sprites'):
             for sprite in self.all_sprites:
                 sprite.kill()
@@ -126,7 +126,7 @@ class Game:
 
         self.load_level(self.game_state.current_level)
 
-    def spawn_wave(self, level, wave):
+    def spawn_wave(self, level, wave): # Spawn enemies for the current wave based on level and wave number
         for enemy in self.enemies:
             enemy.kill()
 
@@ -156,7 +156,7 @@ class Game:
         self.game_state.current_wave = wave
         self.ui.wave = wave
 
-    def is_valid_position(self, x, y):
+    def is_valid_position(self, x, y): # Check if a position is valid for enemy spawning (not in walls or too close to player)
         if x < 0 or x >= 40 or y < 0 or y >= 30:
             return False
 
@@ -173,7 +173,7 @@ class Game:
 
         return True
 
-    def find_valid_position(self, start_x=None, start_y=None):
+    def find_valid_position(self, start_x=None, start_y=None): # Find a valid position for enemy spawning using random placement or near a start position
         center_x = 20
         center_y = 15
         radius = min(40, 30) // 2 - 3
@@ -199,7 +199,7 @@ class Game:
 
         return None
 
-    def check_wave_complete(self):
+    def check_wave_complete(self): # Check if the current wave is complete and handle wave transitions
         if len(self.enemies) == 0 and self.playing and not self.wave_transition_pending:
             self.wave_transition_pending = True
 
@@ -216,7 +216,7 @@ class Game:
 
             self.wave_complete_timer = pygame.time.get_ticks()
 
-    def events(self):
+    def events(self): # Process game events like keyboard/mouse input and handle user actions
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.playing = False
@@ -236,7 +236,7 @@ class Game:
                 if event.button == 1:
                     self.player.attack()
 
-    def save_game(self):
+    def save_game(self): # Save the current game state to a JSON file including map, player, and enemy data
         map_layout = []
         for y in range(30):
             row = []
@@ -327,7 +327,7 @@ class Game:
 
         self.set_direct_notification("Game saved successfully", 2000)
 
-    def load_game(self):
+    def load_game(self): # Load a saved game from a JSON file and restore the game state
         try:
             with open('savegame.json', 'r') as save_file:
                 save_data = json.load(save_file)
@@ -413,7 +413,7 @@ class Game:
             self.set_direct_notification(f"Error loading game: {e}", 3000)
             print(f"Error loading game: {e}")
 
-    def load_level(self, level_number):
+    def load_level(self, level_number): # Load a specific level, creating the appropriate map and spawning enemies
         self.current_level = level_number
 
         old_inventory = []
@@ -525,7 +525,7 @@ class Game:
             pygame.mixer.music.load('audio/Macky Gee - Obsessive.mp3')
             pygame.mixer.music.play(-1, 37)
 
-    def pause_game(self):
+    def pause_game(self): # Pause the game and display the pause menu
         pause_menu = PauseMenu(self)
         pause_menu.run()
         if hasattr(pause_menu, 'open_inventory') and pause_menu.open_inventory:
@@ -533,7 +533,7 @@ class Game:
             inventory_screen = InventoryScreen(self)
             inventory_screen.run()
 
-    def update(self):
+    def update(self): # Update game state including sprites, camera position, and wave transitions
         self.all_sprites.update()
         self.camera_offset_x = self.player.world_x - WW // 2 + TILESIZE // 2
         self.camera_offset_y = self.player.world_y - WH // 2 + TILESIZE // 2
@@ -564,7 +564,7 @@ class Game:
 
         self.check_wave_complete()
 
-    def draw(self):
+    def draw(self): # Draw all game elements to the screen including sprites, UI, and notifications
         self.screen.fill(BLACK)
         self.all_sprites.draw(self.screen)
         for enemy in self.enemies:
@@ -579,19 +579,19 @@ class Game:
         self.clock.tick(FPS)
         pygame.display.update()
 
-    def main(self):
+    def main(self): # Main game loop that handles events, updates game state, and renders the screen
         while self.playing:
             self.events()
             self.update()
             self.draw()
 
-    def game_over(self):
+    def game_over(self): # Display the game over screen when player dies
         self.game_over_screen.run()
 
-    def intro_screen(self):
+    def intro_screen(self): # Display the title screen at game start
         self.title_screen.run()
 
-    def get_grid(self):
+    def get_grid(self): # Create a grid representation of the game map for pathfinding
         grid = [[0] * (WW // TILESIZE) for _ in range(WH // TILESIZE)]
 
         for block in self.blocks:
@@ -601,7 +601,7 @@ class Game:
                 grid[grid_y][grid_x] = 1
         return grid
 
-    def run(self):
+    def run(self): # Run the complete game flow from intro to gameplay to game over
         self.intro_screen()
         if self.running:
             self.new()
@@ -611,7 +611,7 @@ class Game:
                     self.game_over()
 
 
-class GameState:
+class GameState: # Initialize the game state with default values for level, waves, and player stats
     def __init__(self):
         self.current_level = 1
         self.current_wave = 1
@@ -627,7 +627,7 @@ class GameState:
         self.damage_points = 0
 
 
-class PauseMenu:
+class PauseMenu: # Initialize the pause menu with options for player stats and inventory
     def __init__(self, game):
         self.game = game
         self.running = True
@@ -638,7 +638,7 @@ class PauseMenu:
         self.option_rects = []
         self.open_inventory = False
 
-    def handle_events(self):
+    def handle_events(self): # Handle user input events in the pause menu
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -655,7 +655,7 @@ class PauseMenu:
                 elif event.key in [pygame.K_LEFT, pygame.K_RIGHT]:
                     self.adjust_stat(event.key)
 
-    def adjust_stat(self, key):
+    def adjust_stat(self, key): # Adjust player stats when points are allocated in the pause menu
         if self.game.game_state.available_points <= 0 and key == pygame.K_RIGHT:
             return
 
@@ -692,14 +692,14 @@ class PauseMenu:
                 self.game.game_state.available_points += 1
                 self.game.player.damage -= 2
 
-    def select_option(self):
+    def select_option(self): # Process the selected option in the pause menu
         if self.options[self.selected_option] == "Resume Game":
             self.running = False
         elif self.options[self.selected_option] == "Inventory":
             self.open_inventory = True
             self.running = False
 
-    def draw(self):
+    def draw(self): # Draw the pause menu with player stats and available options
         overlay = pygame.Surface((WW, WH))
         overlay.set_alpha(200)
         overlay.fill((0, 0, 0))
@@ -751,20 +751,20 @@ class PauseMenu:
 
         pygame.display.flip()
 
-    def run(self):
+    def run(self): # Run the pause menu loop until player exits
         while self.running:
             self.handle_events()
             self.draw()
 
 
-class TitleScreen:
+class TitleScreen: # Initialize the title screen with fonts and game reference
     def __init__(self, game):
         self.game = game
         self.running = True
         self.font = pygame.font.Font(None, 24)
         self.title_font = pygame.font.Font(None, 48)
 
-    def handle_events(self):
+    def handle_events(self): # Handle user input events on the title screen
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -775,10 +775,10 @@ class TitleScreen:
                     class_selection = ClassSelectionScreen(self.game)
                     class_selection.run()
 
-    def draw(self):
+    def draw(self): # Draw the title screen with game title and instructions
         self.game.screen.fill(BLACK)
 
-        title_text = self.title_font.render("RPG Adventure", True, WHITE)
+        title_text = self.title_font.render("Escape from Hel", True, WHITE)
         title_rect = title_text.get_rect(center=(WW // 2, 200))
         self.game.screen.blit(title_text, title_rect)
 
@@ -788,13 +788,13 @@ class TitleScreen:
 
         pygame.display.update()
 
-    def run(self):
+    def run(self): # Run the title screen loop until player starts the game
         while self.running:
             self.handle_events()
             self.draw()
             self.game.clock.tick(FPS)
 
-class ClassSelectionScreen:
+class ClassSelectionScreen: # Initialize the class selection screen with available character classes
     def __init__(self, game):
         self.game = game
         self.running = True
@@ -822,7 +822,7 @@ class ClassSelectionScreen:
             }
         ]
 
-    def handle_events(self):
+    def handle_events(self): # Handle user input for selecting a character class
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -836,7 +836,7 @@ class ClassSelectionScreen:
                     self.game.player_class = self.classes[self.selected_class]['name'].lower()
                     self.running = False
 
-    def draw(self):
+    def draw(self): # Draw the class selection screen with class options and descriptions
         self.game.screen.fill(BLACK)
 
         title_text = self.title_font.render("Select Your Class", True, WHITE)
@@ -883,7 +883,7 @@ class ClassSelectionScreen:
 
         pygame.display.update()
 
-    def run(self):
+    def run(self): # Run the class selection loop until player confirms a choice
         while self.running:
             self.handle_events()
             self.draw()
@@ -891,13 +891,13 @@ class ClassSelectionScreen:
         return self.game.player_class
 
 
-class EndScreen:
+class EndScreen: # Initialize the end game screen with fonts for victory or defeat
     def __init__(self, game):
         self.game = game
         self.font_large = pygame.font.Font(None, 74)
         self.font_small = pygame.font.Font(None, 36)
 
-    def display(self, victory=False):
+    def display(self, victory=False): # Display the end game screen with victory or defeat message
         self.game.screen.fill((0, 0, 0))
         print("eneded")
 
@@ -938,7 +938,7 @@ class EndScreen:
                         self.game.running = False
 
 
-class GameOverScreen:
+class GameOverScreen: # Initialize the game over screen with retry and quit options
     def __init__(self, game):
         self.game = game
         self.running = True
@@ -948,7 +948,7 @@ class GameOverScreen:
         self.options = ["Retry", "Quit"]
         self.option_rects = []
 
-    def handle_events(self):
+    def handle_events(self): # Handle user input events on the game over screen
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -964,14 +964,14 @@ class GameOverScreen:
                 if event.button == 1:
                     self.handle_mouse_click(event.pos)
 
-    def handle_mouse_click(self, pos):
+    def handle_mouse_click(self, pos): # Process mouse clicks on the game over screen options
         for i, rect in enumerate(self.option_rects):
             if rect.collidepoint(pos):
                 self.selected_option = i
                 self.select_option()
                 break
 
-    def select_option(self):
+    def select_option(self): # Process the selected option on the game over screen
         if self.options[self.selected_option] == "Retry":
             self.running = False
             self.game.running = False
@@ -980,7 +980,7 @@ class GameOverScreen:
             self.running = False
             self.game.running = False
 
-    def draw(self):
+    def draw(self): # Draw the game over screen with available options
         self.game.screen.fill((0, 0, 0))
 
         title_text = self.font.render("Game Over", True, (255, 0, 0))
@@ -997,14 +997,14 @@ class GameOverScreen:
 
         pygame.display.flip()
 
-    def run(self):
+    def run(self): # Run the game over screen loop until player makes a choice
         while self.running:
             self.handle_events()
             self.draw()
 
 
 if __name__=="__main__":
-    game_state = GameState()
+    game_state = GameState() # Game entry point - create game instance and handle restart requests
     g = Game(game_state)
     restart = True
     while restart:

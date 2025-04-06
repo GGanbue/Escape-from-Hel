@@ -2,7 +2,7 @@ import pygame
 from config import *
 
 
-class Item:
+class Item: # Base class for all game items with common properties
     def __init__(self, name, image, item_class, level_req=1):
         self.name = name
         self.image = image
@@ -10,21 +10,22 @@ class Item:
         self.level_req = level_req
 
 
-class Weapon(Item):
+class Weapon(Item): # Weapon item that provides damage bonuses when equipped
     def __init__(self, name, image, item_class, damage, level_req=1):
         super().__init__(name, image, item_class, level_req)
         self.damage = damage
         self.type = "weapon"
 
 
-class Armor(Item):
+class Armor(Item): # Armor item that provides health bonuses when equipped
     def __init__(self, name, image, item_class, health, level_req=1):
         super().__init__(name, image, item_class, level_req)
         self.health = health
         self.type = "armor"
 
 
-def initialize_items(game):
+def initialize_items(game): # Create all weapons and armors available in the game for each class
+    # Define all weapons for each character class with different damage values and level requirements
     weapons = {
         "warrior": [
             Weapon("Iron Shortsword", game.item_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE), "warrior", 15),
@@ -63,7 +64,7 @@ def initialize_items(game):
             Weapon("Soulflame Blade", game.item_spritesheet.get_sprite(320, 0, TILESIZE, TILESIZE), "rogue", 60)
         ]
     }
-
+    # Define all armors for each character class with different health bonuses and level requirements
     armors = {
         "warrior": [
             Armor("Leather Plate", game.item_spritesheet.get_sprite(0, 384, TILESIZE, TILESIZE), "warrior", 10),
@@ -91,7 +92,7 @@ def initialize_items(game):
     return weapons, armors
 
 
-class InventoryScreen:
+class InventoryScreen: # Initialize the inventory screen with display settings and selection state
     def __init__(self, game):
         self.game = game
         self.running = True
@@ -101,7 +102,7 @@ class InventoryScreen:
         self.scroll_offset = 0
         self.items_per_page = 8
 
-    def handle_events(self):
+    def handle_events(self): # Process user input for navigating and interacting with the inventory
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -120,7 +121,7 @@ class InventoryScreen:
                 elif event.key == pygame.K_RETURN:
                     self.equip_selected_item()
 
-    def equip_selected_item(self):
+    def equip_selected_item(self): # Equip or unequip the selected item and apply its stats to the player
         if 0 <= self.selected_index < len(self.game.player.inventory):
             item = self.game.player.inventory[self.selected_index]
 
@@ -158,7 +159,7 @@ class InventoryScreen:
                     self.game.player.health += item.health
                     self.game.set_direct_notification(f"Equipped {item.name}")
 
-    def draw(self):
+    def draw(self): # Render the inventory screen with items, equipped gear, and navigation hints
         overlay = pygame.Surface((WW, WH))
         overlay.set_alpha(200)
         overlay.fill((0, 0, 0))
@@ -215,7 +216,7 @@ class InventoryScreen:
 
         pygame.display.flip()
 
-    def run(self):
+    def run(self): # Main loop for the inventory screen that handles events and updates display
         while self.running:
             self.handle_events()
             self.draw()
