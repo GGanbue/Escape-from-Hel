@@ -1,4 +1,5 @@
-import pygame, math, random
+import pygame, math, random, numpy
+import pygame.gfxdraw
 from config import *
 from pathfinding import astar_pathfinding
 
@@ -29,12 +30,15 @@ class Player(pygame.sprite.Sprite):
 
         self.max_health = 100
         self.health = self.max_health
+        self.max_stamina = 100
+        self.stamina = self.max_stamina
+        self.stamina_regen_rate = 20
 
         self.facing = 'left'
 
         self.rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
-        self.image = self.game.character_spritesheet.get_sprite(0, 0, TILESIZE, TILESIZE)
+        self.image = self.game.character_spritesheet.get_sprite(32, 128, TILESIZE, TILESIZE)
 
     def update(self):
         self.movement()
@@ -47,23 +51,40 @@ class Player(pygame.sprite.Sprite):
         self.x_change = 0
         self.y_change = 0
 
+        if self.stamina < self.max_stamina:
+            self.stamina += self.stamina_regen_rate * (1 / FPS)
+            if self.stamina > self.max_stamina:
+                self.stamina = self.max_stamina
+
+        self.game.ui.stamina = self.stamina
+        self.game.ui.max_stamina = self.max_stamina
+
     def movement(self):
         keys = pygame.key.get_pressed()
         new_facing = self.facing
+        current_time = pygame.time.get_ticks()
 
         self.x_change = 0
         self.y_change = 0
 
+        speed_multiplier = 1.0
+
+        if keys[pygame.K_LSHIFT] and self.stamina > 5:
+            speed_multiplier = 1.7
+            self.stamina -= 20 * (4/FPS)
+            if self.stamina < 0:
+                self.stamina = 0
+
         if keys[pygame.K_a]:
-            self.x_change = -PLAYER_SPEED
+            self.x_change = -PLAYER_SPEED * speed_multiplier
             new_facing = 'left'
         if keys[pygame.K_d]:
-            self.x_change = PLAYER_SPEED
+            self.x_change = PLAYER_SPEED * speed_multiplier
             new_facing = 'right'
         if keys[pygame.K_w]:
-            self.y_change = -PLAYER_SPEED
+            self.y_change = -PLAYER_SPEED * speed_multiplier
         if keys[pygame.K_s]:
-            self.y_change = PLAYER_SPEED
+            self.y_change = PLAYER_SPEED * speed_multiplier
 
         if new_facing != self.facing:
             self.image = pygame.transform.flip(self.image, True, False)
@@ -93,8 +114,8 @@ class Player(pygame.sprite.Sprite):
     def take_damage(self, amount):
         self.health -= amount
         if self.health <= 0:
-            # Handle player death
-            self.game.playing = False  # End the game when player dies
+            self.health = 0
+            self.game.playing = False
 
     def draw_health_bar(self, surface):
         health_ratio = self.health / self.max_health
@@ -104,20 +125,25 @@ class Player(pygame.sprite.Sprite):
         pygame.draw.rect(surface, (0, 255, 0), (self.rect.x, self.rect.y - 10, bar_width * health_ratio, bar_height))
 
     def attack(self):
-        # Get mouse position
+        current_time = pygame.time.get_ticks()
+        if hasattr(self, 'last_attack_time') and current_time - self.last_attack_time < 750:
+            return
+
+        self.last_attack_time = current_time
+
         mouse_pos = pygame.mouse.get_pos()
 
-        # Convert screen position to world position
         world_mouse_x = mouse_pos[0] + self.game.camera_offset_x
         world_mouse_y = mouse_pos[1] + self.game.camera_offset_y
 
-        # Calculate direction to mouse
-        dx = world_mouse_x - self.world_x
-        dy = world_mouse_y - self.world_y
+        player_center_x = self.world_x + 16
+        player_center_y = self.world_y + 16
+
+        dx = world_mouse_x - player_center_x
+        dy = world_mouse_y - player_center_y
         direction = math.atan2(dy, dx)
 
-        # Create attack object
-        Attack(self.game, self.world_x + TILESIZE / 2, self.world_y + TILESIZE / 2, direction)
+        Attack(self.game, player_center_x, player_center_y, direction)
 
 
 class Block(pygame.sprite.Sprite):
@@ -207,7 +233,12 @@ class Enemy(pygame.sprite.Sprite):
             current_time = pygame.time.get_ticks()
             if not hasattr(self, 'last_attack_time') or current_time - self.last_attack_time > 1000:
                 self.last_attack_time = current_time
-                self.game.player.take_damage(10)  # Damage amount
+                self.game.player.take_damage(10)
+
+        if hasattr(self, 'hit_flash') and self.hit_flash:
+            if pygame.time.get_ticks() - self.hit_time > 100:
+                self.hit_flash = False
+            self.image.fill((255, 0, 0), special_flags=pygame.BLEND_RGB_MULT)
 
     def detect_and_handle_corner_stuck(self, prev_x, prev_y):
         if not hasattr(self, 'stuck_count'):
@@ -471,8 +502,10 @@ class Enemy(pygame.sprite.Sprite):
 
     def take_damage(self, amount):
         self.health -= amount
+        self.hit_flash = True
+        self.hit_time = pygame.time.get_ticks()
         if self.health <= 0:
-            self.kill()  # Remove the enemy sprite when health reaches 0
+            self.kill()
 
     def draw_health_bar(self, surface):
         health_ratio = self.health / self.max_health
@@ -484,67 +517,118 @@ class Enemy(pygame.sprite.Sprite):
 
 class Attack(pygame.sprite.Sprite):
     def __init__(self, game, x, y, direction):
-        self._layer = PLAYER_LAYER
-        self.groups = game.all_sprites, game.attacks
-        pygame.sprite.Sprite.__init__(self, self.groups)
+        super().__init__()
 
         self.game = game
+        self._layer = PLAYER_LAYER
+        self.groups = self.game.all_sprites, self.game.attacks
+        pygame.sprite.Sprite.__init__(self, self.groups)
+
         self.world_x = x
         self.world_y = y
-        self.direction = direction  # Angle in radians
 
-        # Create an arc-shaped attack area
-        self.radius = TILESIZE * 1.5
-        self.arc_width = math.pi / 2  # 90-degree arc
-        self.lifetime = 200  # milliseconds
-        self.damage = 25
-        self.creation_time = pygame.time.get_ticks()
-
-        # Create a surface for the attack visualization
-        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        self.image = pygame.Surface((TILESIZE // 2, TILESIZE // 2))
+        self.image = self.game.fireball.get_sprite(0, 0, TILESIZE, TILESIZE)
+        self.image.set_colorkey(WHITE)
         self.rect = self.image.get_rect()
+        self.rect.center = (x, y)
 
-        # Draw the arc
-        start_angle = self.direction - self.arc_width / 2
-        end_angle = self.direction + self.arc_width / 2
-        pygame.draw.arc(self.image, (255, 255, 255, 128),
-                        (0, 0, self.radius * 2, self.radius * 2),
-                        start_angle, end_angle, width=self.radius)
-
-        # Store hitbox for collision detection
-        self.hitbox_points = []
-        for angle in numpy.linspace(start_angle, end_angle, 10):
-            self.hitbox_points.append((
-                x + math.cos(angle) * self.radius,
-                y + math.sin(angle) * self.radius
-            ))
+        self.direction = direction
+        self.speed = 10
+        self.damage = 50
 
     def update(self):
-        # Check if attack lifetime is over
-        if pygame.time.get_ticks() - self.creation_time > self.lifetime:
-            self.kill()
-            return
+        self.world_x += math.cos(self.direction) * self.speed
+        self.world_y += math.sin(self.direction) * self.speed
 
-        # Update position with camera
-        self.rect.x = self.world_x - self.game.camera_offset_x - self.radius
-        self.rect.y = self.world_y - self.game.camera_offset_y - self.radius
+        self.rect.x = self.world_x - self.game.camera_offset_x
+        self.rect.y = self.world_y - self.game.camera_offset_y
 
-        # Check for collisions with enemies
+        for block in self.game.blocks:
+            block_rect = pygame.Rect(block.world_x, block.world_y, TILESIZE, TILESIZE)
+            attack_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE // 2, TILESIZE // 2)
+
+            if attack_rect.colliderect(block_rect):
+                self.kill()
+                return
+
         for enemy in self.game.enemies:
-            enemy_center = (enemy.world_x + TILESIZE / 2, enemy.world_y + TILESIZE / 2)
-            distance = math.sqrt((enemy_center[0] - self.world_x) ** 2 +
-                                 (enemy_center[1] - self.world_y) ** 2)
+            enemy_rect = pygame.Rect(enemy.world_x, enemy.world_y, TILESIZE, TILESIZE)
+            attack_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE // 2, TILESIZE // 2)
 
-            # Check if enemy is within radius
-            if distance <= self.radius:
-                # Check if enemy is within arc
-                angle_to_enemy = math.atan2(enemy_center[1] - self.world_y,
-                                            enemy_center[0] - self.world_x)
+            if attack_rect.colliderect(enemy_rect):
+                enemy.take_damage(self.damage)
+                enemy.hit_flash = True
+                enemy.hit_time = pygame.time.get_ticks()
+                self.kill()
+                return
 
-                # Normalize angle difference
-                angle_diff = (angle_to_enemy - self.direction) % (2 * math.pi)
-                if angle_diff > math.pi:
-                    angle_diff = 2 * math.pi - angle_diff
+        if (abs(self.world_x - self.game.player.world_x) > WW or
+                abs(self.world_y - self.game.player.world_y) > WH):
+            self.kill()
 
-                if angle_diff <= self.arc_width / 2:
-                    enemy.take_damage(self.damage)
+
+class UI:
+    def __init__(self, game):
+        self.game = game
+        self.font = pygame.font.Font(None, 32)
+        self.small_font = pygame.font.Font(None, 24)
+
+        self.health_color = (220, 50, 50)
+        self.stamina_color = (50, 150, 220)
+        self.gold_color = (255, 215, 0)
+        self.ui_bg_color = (30, 30, 30, 180)  # Semi-transparent background
+
+        self.item_slot = pygame.Surface((64, 64))
+        self.item_slot.fill((50, 50, 50))
+        pygame.draw.rect(self.item_slot, (100, 100, 100), (0, 0, 64, 64), 2)
+
+        self.gold = 0
+        self.wave = 1
+        self.max_stamina = 100
+        self.stamina = 100
+        self.weapon = None
+        self.armor = None
+
+    def draw(self, surface):
+        health_ratio = self.game.player.health / self.game.player.max_health
+        health_bar_width = 200
+        health_bar_height = 20
+        health_bar_x = WW - health_bar_width - 20
+        health_bar_y = 20
+
+        pygame.draw.rect(surface, (0, 0, 0), (health_bar_x, health_bar_y, health_bar_width, health_bar_height))
+        pygame.draw.rect(surface, self.health_color,
+                         (health_bar_x, health_bar_y, health_bar_width * health_ratio, health_bar_height))
+        health_text = self.font.render(f"{int(self.game.player.health)}/{self.game.player.max_health}", True,
+                                       (255, 255, 255))
+        surface.blit(health_text, (health_bar_x + health_bar_width // 2 - health_text.get_width() // 2,
+                                   health_bar_y + health_bar_height // 2 - health_text.get_height() // 2))
+
+        stamina_ratio = self.stamina / self.max_stamina
+        stamina_bar_width = 200
+        stamina_bar_height = 10
+        stamina_bar_x = health_bar_x
+        stamina_bar_y = health_bar_y + health_bar_height + 5
+
+        pygame.draw.rect(surface, (0, 0, 0), (stamina_bar_x, stamina_bar_y, stamina_bar_width, stamina_bar_height))
+        pygame.draw.rect(surface, self.stamina_color,
+                         (stamina_bar_x, stamina_bar_y, stamina_bar_width * stamina_ratio, stamina_bar_height))
+
+        gold_text = self.font.render(f"Gold: {self.gold}", True, self.gold_color)
+        surface.blit(gold_text, (WW - gold_text.get_width() - 20, stamina_bar_y + stamina_bar_height + 10))
+
+        wave_text = self.font.render(f"Wave: {self.wave}", True, (255, 255, 255))
+        surface.blit(wave_text, (WW // 2 - wave_text.get_width() // 2, 20))
+
+        weapon_slot_x = WW // 2 - 70
+        armor_slot_x = WW // 2 + 6
+        slots_y = WH - 80
+
+        surface.blit(self.item_slot, (weapon_slot_x, slots_y))
+        weapon_text = self.small_font.render("Weapon", True, (200, 200, 200))
+        surface.blit(weapon_text, (weapon_slot_x + 32 - weapon_text.get_width() // 2, slots_y + 70))
+
+        surface.blit(self.item_slot, (armor_slot_x, slots_y))
+        armor_text = self.small_font.render("Armor", True, (200, 200, 200))
+        surface.blit(armor_text, (armor_slot_x + 32 - armor_text.get_width() // 2, slots_y + 70))

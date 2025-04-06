@@ -4,47 +4,107 @@ from sprites import *
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, game_state=None):
         pygame.init()
         self.screen = pygame.display.set_mode((WW, WH))
         self.clock = pygame.time.Clock()
         self.running = True
         pygame.display.set_caption("Escape from Maldo")
-
-        self.character_spritesheet = Spritesheet('img/warrior still.PNG')
+        if game_state is None:
+            self.game_state = GameState()
+        else:
+            self.game_state = game_state
+        self.character_spritesheet = Spritesheet('img/32rogues/rogues.png')
         self.terrain_spritesheet = Spritesheet('img/32rogues/tiles.png')
         self.enemy_spritesheet = Spritesheet('img/32rogues/monsters.png')
+        self.item_spritesheet = Spritesheet('img/32rogues/items.png')
+        self.fireball = Spritesheet('img/shot_fireball.png')
 
         self.title_screen = TitleScreen(self)
+        self.game_over_screen = GameOverScreen(self)
         pygame.mixer.init()
-        pygame.mixer.music.load('Macky Gee - Obsessive.mp3')
-        pygame.mixer.music.play(-1, 37)
+        self.ui = UI(self)
+        self.gold = 0
+        self.wave = 1
 
-    def createTilemap(self):
+
+    def createTilemap(self, tilemap=None):
+        if tilemap is None:
+            tilemap = level1_map
         for i, row in enumerate(tilemap):
             for j, column in enumerate(row):
                 Ground(self, j, i)
                 if column == 'B':
                     Block(self, j, i)
-                if column == "E":
-                    Enemy(self, j, i)
                 if column == 'P':
                     self.player = Player(self, j, i)
 
-
     def new(self):
-        #new game start
+        if hasattr(self, 'all_sprites'):
+            for sprite in self.all_sprites:
+                sprite.kill()
         self.playing = True
+        self.all_sprites = pygame.sprite.LayeredUpdates()
+        self.blocks = pygame.sprite.LayeredUpdates()
+        self.enemies = pygame.sprite.LayeredUpdates()
+        self.attacks = pygame.sprite.LayeredUpdates()
+
+        self.load_level(self.game_state.current_level)
+
+    def load_level(self, level_number):
+        self.current_level = level_number
+
+        if hasattr(self, 'all_sprites'):
+            for sprite in self.all_sprites:
+                sprite.kill()
 
         self.all_sprites = pygame.sprite.LayeredUpdates()
         self.blocks = pygame.sprite.LayeredUpdates()
         self.enemies = pygame.sprite.LayeredUpdates()
         self.attacks = pygame.sprite.LayeredUpdates()
 
-        self.createTilemap()
+        if level_number == 1:
+            self.createTilemap(level1_map)
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('Macky Gee - Obsessive.mp3')
+            pygame.mixer.music.play(-1, 37)
+        elif level_number == 2:
+            self.createTilemap(level2_map)
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('Macky Gee - Moments.mp3')
+            pygame.mixer.music.play(-1, 60)
+        else:
+            self.createTilemap(level1_map)
+
+        self.spawn_wave(level_number, self.game_state.current_wave)
+
+        self.game_state.current_level = level_number
+        if level_number > self.game_state.max_level_reached:
+            self.game_state.max_level_reached = level_number
+
+    def spawn_wave(self, level, wave):
+        for enemy in self.enemies:
+            enemy.kill()
+
+        if level in level_waves and wave - 1 < len(level_waves[level]):
+            enemy_positions = level_waves[level][wave - 1]
+            for pos in enemy_positions:
+                Enemy(self, pos[0], pos[1])
+
+        self.game_state.current_wave = wave
+        self.ui.wave = wave
+
+    def check_wave_complete(self):
+        if len(self.enemies) == 0 and self.playing:
+            if self.game_state.current_wave < self.game_state.max_waves_per_level.get(self.game_state.current_level, 1):
+                self.game_state.current_wave += 1
+                self.spawn_wave(self.game_state.current_level, self.game_state.current_wave)
+            else:
+                self.game_state.current_level += 1
+                self.game_state.current_wave = 1
+                self.load_level(self.game_state.current_level)
 
     def events(self):
-        #game loop events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.playing = False
@@ -54,34 +114,36 @@ class Game:
                     self.player.attack()
 
     def update(self):
-        #game loop updates
         self.all_sprites.update()
         self.camera_offset_x = self.player.world_x - WW // 2 + TILESIZE // 2
         self.camera_offset_y = self.player.world_y - WH // 2 + TILESIZE // 2
         for sprite in self.all_sprites:
             sprite.rect.x = sprite.world_x - self.camera_offset_x
             sprite.rect.y = sprite.world_y - self.camera_offset_y
+        self.check_wave_complete()
 
     def draw(self):
-        #game loop draw
         self.screen.fill(BLACK)
         self.all_sprites.draw(self.screen)
         for enemy in self.enemies:
             enemy.draw_health_bar(self.screen)
         self.player.draw_health_bar(self.screen)
+        for attack in self.attacks:
+            self.screen.blit(attack.image, attack.rect)
+        self.ui.gold = self.gold
+        self.ui.wave = self.game_state.current_wave
+        self.ui.draw(self.screen)
         self.clock.tick(FPS)
         pygame.display.update()
 
     def main(self):
-        #game loop
         while self.playing:
             self.events()
             self.update()
             self.draw()
-        self.running = False
 
     def game_over(self):
-        pass
+        self.game_over_screen.run()
 
     def intro_screen(self):
         self.title_screen.run()
@@ -102,7 +164,17 @@ class Game:
             self.new()
             while self.running:
                 self.main()
-                self.game_over()
+                if not self.playing and self.running:
+                    self.game_over()
+
+
+class GameState:
+    def __init__(self):
+        self.current_level = 1
+        self.current_wave = 1
+        self.max_waves_per_level = {1:5, 2:5}
+        self.gold = 0
+        self.max_level_reached = 1
 
 
 class TitleScreen:
@@ -150,7 +222,7 @@ class TitleScreen:
     def draw(self):
         self.game.screen.fill((0, 0, 0))
 
-        title_text = self.font.render("Escape from Hel", True, (255, 255, 255))
+        title_text = self.font.render("Escape from Maldo Goblin", True, (255, 255, 255))
         title_rect = title_text.get_rect(center=(self.game.screen.get_width() // 2, 100))
         self.game.screen.blit(title_text, title_rect)
 
@@ -168,8 +240,86 @@ class TitleScreen:
         while self.running:
             self.handle_events()
             self.draw()
+
+class GameOverScreen:
+    def __init__(self, game):
+        self.game = game
+        self.running = True
+        self.font = pygame.font.Font(None, 74)
+        self.menu_font = pygame.font.Font(None, 36)
+        self.selected_option = 0
+        self.options = ["Retry", "Quit"]
+        self.option_rects = []
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                self.game.running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    self.selected_option = (self.selected_option - 1) % len(self.options)
+                elif event.key == pygame.K_DOWN:
+                    self.selected_option = (self.selected_option + 1) % len(self.options)
+                elif event.key == pygame.K_RETURN:
+                    self.select_option()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    self.handle_mouse_click(event.pos)
+
+    def handle_mouse_click(self, pos):
+        for i, rect in enumerate(self.option_rects):
+            if rect.collidepoint(pos):
+                self.selected_option = i
+                self.select_option()
+                break
+
+    def select_option(self):
+        if self.options[self.selected_option] == "Retry":
+            self.running = False
+            self.game.running = False
+            self.game.restart_requested = True
+        elif self.options[self.selected_option] == "Quit":
+            self.running = False
+            self.game.running = False
+
+    def draw(self):
+        self.game.screen.fill((0, 0, 0))
+
+        title_text = self.font.render("Game Over", True, (255, 0, 0))
+        title_rect = title_text.get_rect(center=(self.game.screen.get_width() // 2, 100))
+        self.game.screen.blit(title_text, title_rect)
+
+        self.option_rects = []
+        for i, option in enumerate(self.options):
+            color = (255, 255, 0) if i == self.selected_option else (255, 255, 255)
+            text = self.menu_font.render(option, True, color)
+            rect = text.get_rect(center=(self.game.screen.get_width() // 2, 250 + i * 50))
+            self.game.screen.blit(text, rect)
+            self.option_rects.append(rect)
+
+        pygame.display.flip()
+
+    def run(self):
+        while self.running:
+            self.handle_events()
+            self.draw()
+
+
 if __name__=="__main__":
-    g = Game()
-    g.run()
+    game_state = GameState()
+    g = Game(game_state)
+    restart = True
+    while restart:
+        g.run()
+        if hasattr(g, 'restart_requested') and g.restart_requested:
+            game_state = g.game_state
+            pygame.mixer.music.stop()
+            pygame.event.clear()
+            del g
+            g = Game(game_state)
+            restart = True
+        else:
+            restart = False
     pygame.quit()
     sys.exit()
