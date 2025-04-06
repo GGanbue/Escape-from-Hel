@@ -46,17 +46,17 @@ class Player(pygame.sprite.Sprite):
             self.max_health = 150
             self.health = self.max_health
             self.damage = 30
-            self.attack_cooldown = 800  # Slower attacks
+            self.attack_cooldown = 800
         elif self.player_class == 'mage':
             self.max_health = 80
             self.health = self.max_health
-            self.damage = 20
-            self.attack_cooldown = 100 # Medium speed attacks
+            self.damage = 1000
+            self.attack_cooldown = 100
         elif self.player_class == 'rogue':
             self.max_health = 100
             self.health = self.max_health
             self.damage = 40
-            self.attack_cooldown = 400  # Fast attacks
+            self.attack_cooldown = 400
 
         self.last_attack_time = 0
 
@@ -123,7 +123,6 @@ class Player(pygame.sprite.Sprite):
             self.world_x += math.cos(self.direction) * self.speed
             self.world_y += math.sin(self.direction) * self.speed
 
-            # Update screen coordinates based on world coordinates and camera offset
             self.rect.centerx = self.world_x - self.game.camera_offset_x
             self.rect.centery = self.world_y - self.game.camera_offset_y
 
@@ -200,23 +199,18 @@ class Player(pygame.sprite.Sprite):
         if current_time - self.last_attack_time >= self.attack_cooldown:
             self.last_attack_time = current_time
 
-            # Get the mouse position relative to the screen
             mouse_x, mouse_y = pygame.mouse.get_pos()
 
-            # Convert screen position to world position by adding camera offset
             world_mouse_x = mouse_x + self.game.camera_offset_x
             world_mouse_y = mouse_y + self.game.camera_offset_y
 
-            # Calculate direction vector from player to mouse
             dir_x = world_mouse_x - self.world_x
             dir_y = world_mouse_y - self.world_y
 
-            # Normalize the direction vector
             length = max(1, math.sqrt(dir_x * dir_x + dir_y * dir_y))
             dir_x = dir_x / length
             dir_y = dir_y / length
 
-            # Calculate angle in radians from the direction vector
             angle = math.atan2(dir_y, dir_x)
 
 
@@ -248,10 +242,10 @@ class Player(pygame.sprite.Sprite):
 
                 attack = Attack(
                     self.game,
-                    self.world_x + dir_x * TILESIZE / 2,  # Position slightly in front of player
+                    self.world_x + dir_x * TILESIZE / 2,
                     self.world_y + dir_y * TILESIZE / 2,
                     angle,
-                    self.game.sword_swing,  # Needs to be defined in the Game class
+                    self.game.sword_swing,
                     "sword_swing",
                     self.damage,
                     projectile=False,
@@ -259,18 +253,16 @@ class Player(pygame.sprite.Sprite):
                     aoe_radius=TILESIZE / 1.5
                 )
             elif self.player_class == 'rogue':
-                # Rogues use quick dagger strikes or thrown daggers
                 attack = Attack(
                     self.game,
                     self.world_x,
                     self.world_y,
                     angle,
-                    self.game.dagger,  # Needs to be defined in the Game class
+                    self.game.dagger,
                     "dagger",
                     self.damage,
                     projectile=False
                 )
-                # Rogues can attack faster, so reduce cooldown temporarily
                 self.last_attack_time -= self.attack_cooldown * 0.2
 
 
@@ -664,13 +656,11 @@ class Enemy(pygame.sprite.Sprite):
                 if current_level <= 5:
                     player_class = self.game.player.player_class
 
-                    # Drop armor
                     armor_index = current_level - 1
                     if armor_index < len(self.game.armors[player_class]):
                         item = self.game.armors[player_class][armor_index]
                         self.game.player.inventory.append(item)
 
-                    # Drop weapon
                     weapon_index = (current_level - 1) * 2
                     if random.random() < 0.5:
                         weapon_to_drop = weapon_index
@@ -719,7 +709,6 @@ class Attack(pygame.sprite.Sprite):
         self.aoe = aoe
         self.aoe_radius = aoe_radius
 
-        # Load the correct sprite based on attack_type
         if attack_type == "sword_swing":
             self.original_image = game.warrior_attack_sprite
             self.original_image.set_colorkey(BLACK)
@@ -732,71 +721,59 @@ class Attack(pygame.sprite.Sprite):
 
 
 
-        # Rotate the image based on direction
         angle_degrees = math.degrees(direction)
         self.image = pygame.transform.rotate(self.original_image, -angle_degrees)
 
-        # Get the new rect after rotation
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
 
-        # Set lifespan for attacks
         self.creation_time = pygame.time.get_ticks()
         if self.projectile:
-            self.lifespan = 1000  # Projectiles last 1 second
+            self.lifespan = 1000
         else:
-            self.lifespan = 200  # Melee attacks last 0.2 seconds
+            self.lifespan = 200
 
-        # For AOE attacks, create a larger collision rect
         if self.aoe:
             self.aoe_rect = pygame.Rect(0, 0, self.aoe_radius * 2, self.aoe_radius * 2)
             self.aoe_rect.center = self.rect.center
 
     def update(self):
-        # Check if attack should expire
         if pygame.time.get_ticks() - self.creation_time > self.lifespan:
             self.kill()
             return
 
-        # Move projectiles
         if self.projectile:
             self.world_x += math.cos(self.direction) * self.speed
             self.world_y += math.sin(self.direction) * self.speed
 
-            # Update screen position based on world position and camera offset
             screen_x = self.world_x - self.game.camera_offset_x
             screen_y = self.world_y - self.game.camera_offset_y
             self.rect.center = (screen_x, screen_y)
 
-            # Check for collisions with walls
             for block in self.game.blocks:
                 if self.rect.colliderect(block.rect):
                     self.kill()
                     return
 
-        # Check for collisions with enemies
         hits = []
         for enemy in self.game.enemies:
             if self.aoe:
-                # For AOE attacks, check if enemy is within the AOE radius
                 self.aoe_rect.center = (self.world_x - self.game.camera_offset_x,
                                         self.world_y - self.game.camera_offset_y)
                 if self.aoe_rect.colliderect(enemy.rect):
                     hits.append(enemy)
             else:
-                # For regular attacks, check direct collision
                 if self.rect.colliderect(enemy.rect):
                     hits.append(enemy)
-                    if not self.projectile:  # Melee attacks only hit once
+                    if not self.projectile:
                         break
 
-        # Apply damage to enemies
         for enemy in hits:
             enemy.take_damage(self.damage)
-            if not self.aoe and not self.projectile:  # Melee attacks only hit once
+            if not self.aoe and not self.projectile:
                 self.kill()
                 return
-            elif self.projectile:  # Projectiles disappear after hitting
+            elif self.projectile:
                 self.kill()
                 return
 
@@ -810,7 +787,7 @@ class UI:
         self.health_color = (220, 50, 50)
         self.stamina_color = (50, 150, 220)
         self.gold_color = (255, 215, 0)
-        self.ui_bg_color = (30, 30, 30, 180)  # Semi-transparent background
+        self.ui_bg_color = (30, 30, 30, 180)
 
         self.item_slot = pygame.Surface((64, 64))
         self.item_slot.fill((50, 50, 50))
@@ -858,7 +835,7 @@ class UI:
                          (stamina_bar_x, stamina_bar_y, stamina_bar_width * stamina_ratio, stamina_bar_height))
 
         gold_text = self.font.render(f"Gold: {self.gold}", True, self.gold_color)
-        surface.blit(gold_text, (WW - gold_text.get_width() - 20, stamina_bar_y + stamina_bar_height + 10))
+        surface.blit(gold_text, (WW - gold_text.get_width() - 20, stamina_bar_y + stamina_bar_height + 20))
 
         wave_text = self.font.render(f"Wave: {self.wave}", True, (255, 255, 255))
         surface.blit(wave_text, (WW // 2 - wave_text.get_width() // 2, 20))
@@ -878,15 +855,12 @@ class UI:
         exp_ratio = self.game.player.exp / self.game.player.exp_to_next_level
         exp_bar_width = 200
         exp_bar_height = 10
-        exp_bar_x = stamina_bar_x  # Reuse the same x position as stamina bar
-        exp_bar_y = stamina_bar_y + stamina_bar_height + 5  # Position it below stamina bar
+        exp_bar_x = stamina_bar_x
+        exp_bar_y = stamina_bar_y + stamina_bar_height + 5
 
-        # Draw background of exp bar
         pygame.draw.rect(surface, (0, 0, 0), (exp_bar_x, exp_bar_y, exp_bar_width, exp_bar_height))
-        # Draw filled portion of exp bar
         pygame.draw.rect(surface, (100, 100, 255), (exp_bar_x, exp_bar_y, exp_bar_width * exp_ratio, exp_bar_height))
 
-        # Add level text next to the exp bar
         level_text = self.font.render(f"Level: {self.game.player.level}", True, (255, 255, 255))
         surface.blit(level_text, (exp_bar_x - level_text.get_width() - 10, exp_bar_y))
 
@@ -907,23 +881,19 @@ class UI:
         armor_slot_x = WW // 2 + 6
         slots_y = WH - 80
 
-        # Draw empty slots
         surface.blit(self.item_slot, (weapon_slot_x, slots_y))
         surface.blit(self.item_slot, (armor_slot_x, slots_y))
 
-        # Draw equipped weapon
         if self.game.player.equipped_weapon:
             weapon_image = self.game.player.equipped_weapon.image
             surface.blit(weapon_image, (weapon_slot_x + 32 - weapon_image.get_width() // 2,
                                         slots_y + 32 - weapon_image.get_height() // 2))
 
-        # Draw equipped armor
         if self.game.player.equipped_armor:
             armor_image = self.game.player.equipped_armor.image
             surface.blit(armor_image, (armor_slot_x + 32 - armor_image.get_width() // 2,
                                        slots_y + 32 - armor_image.get_height() // 2))
 
-        # Draw labels
         weapon_text = self.small_font.render("Weapon", True, (200, 200, 200))
         surface.blit(weapon_text, (weapon_slot_x + 32 - weapon_text.get_width() // 2, slots_y + 70))
 

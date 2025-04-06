@@ -20,37 +20,30 @@ WHITE = (255, 255, 255)
 
 
 def generate_shaped_map(width, height, shape_type='rectangle'):
-    # Start with an empty map (all block tiles)
     map = [['B' for _ in range(width)] for _ in range(height)]
 
     if shape_type == 'rectangle':
-        # Create rectangular play area
         for y in range(1, height - 1):
             for x in range(1, width - 1):
-                map[y][x] = '.'  # Floor tiles inside the rectangle
+                map[y][x] = '.'
 
     elif shape_type == 'circle':
-        # Create circular play area
         center_x = width // 2
         center_y = height // 2
         radius = min(width, height) // 2 - 1
 
         for y in range(height):
             for x in range(width):
-                # Calculate distance from center
                 distance = ((x - center_x) ** 2 + (y - center_y) ** 2) ** 0.5
 
-                # Only place floor tiles inside the circle
                 if distance < radius:
                     map[y][x] = '.'
 
-    # Add random small connected shapes of blocks
-    num_shapes = random.randint(3, 7)  # Number of shapes to add
+    num_shapes = random.randint(3, 7)
 
     for _ in range(num_shapes):
-        # Choose a random starting point that's a floor tile
         attempts = 0
-        while attempts < 100:  # Prevent infinite loop
+        while attempts < 100:
             start_x = random.randint(5, width - 6)
             start_y = random.randint(5, height - 6)
             if map[start_y][start_x] == '.':
@@ -77,12 +70,10 @@ def generate_shaped_map(width, height, shape_type='rectangle'):
                     nx, ny = x + dx, y + dy
                     if (0 < nx < width - 1 and 0 < ny < height - 1 and
                             map[ny][nx] == '.' and
-                            random.random() < 0.7):  # 70% chance to grow in this direction
+                            random.random() < 0.7):
                         blocks.append((nx, ny))
 
-    # Ensure player spawn area is clear
-    px, py = width // 2, height // 2  # Place player in center
-    # Clear a 3x3 area around player spawn
+    px, py = width // 2, height // 2
     for dy in range(-1, 2):
         for dx in range(-1, 2):
             ny, nx = py + dy, px + dx

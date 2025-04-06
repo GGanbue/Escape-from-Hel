@@ -1,0 +1,41 @@
+# Escape from Hel
+
+A roguelike adventure game built with Pygame where you must battle through waves of enemies to escape from Hel.
+
+## How to Play
+
+### Controls
+- WASD: Move your character
+- Mouse: Aim
+- Left Click: Attack
+- E: Use item
+- F5: Save game
+- F9: Load game
+- ESC: Pause game
+- Up and Down arrows: Navigate through menus
+- Enter: Confirm choice
+
+### Classes
+- Warrior: High health, melee attacks
+- Rogue: Fast movement, powerful dagger critical strikes
+- Mage: Powerful fireballs, low health
+
+### Objective
+Survive waves of increasingly difficult enemies, collect gold, and defeat bosses to progress through levels and ultimately escape from Hel.
+
+## Game Features
+- Multiple character classes with unique abilities
+- Procedurally generated levels
+- Wave-based enemy spawning
+- Boss fights
+- Item collection and upgrades
+- Save/load system
+
+## Installation
+1. Ensure you have Python 3.x installed
+2. Install Pygame: `pip install pygame`
+3. Run the game: `python main.py`
+
+## Credits
+- Game created by Christian "The GOAT" "Faker" Buzzard
+- Sprites from the 32rogues tileset

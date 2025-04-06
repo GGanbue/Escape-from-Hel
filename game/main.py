@@ -1,4 +1,4 @@
-import pygame, sys, random
+import pygame, sys, random, os, json
 from config import *
 from sprites import *
 from items import initialize_items
@@ -21,8 +21,8 @@ class Game:
         self.item_spritesheet = Spritesheet('img/32rogues/items.png')
         self.alt_item_spritesheet = Spritesheet('img/32rogues/items-palette-swaps.png')
         self.fireball = Spritesheet('img/shot_fireball.png')
-        self.dagger = Spritesheet('rogue_skill4_frame4.png')
-        self.sword_swing = Spritesheet('rogue_skill2_frame2.png')
+        self.dagger = Spritesheet('img/rogue_skill4_frame4.png')
+        self.sword_swing = Spritesheet('img/rogue_skill2_frame2.png')
 
         self.block_textures = {
             1: self.terrain_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE),
@@ -59,11 +59,11 @@ class Game:
         self.weapon_textures = {
             'mage': self.fireball,
             'warrior': self.item_spritesheet.get_sprite(32, 96, 32, 32),
-            'rogue': self.item_spritesheet.get_sprite(32, 0, 32, 32)  # Adjust coordinates to match your dagger sprite
+            'rogue': self.item_spritesheet.get_sprite(32, 0, 32, 32)
         }
 
-        self.warrior_attack_sprite = pygame.image.load("rogue_skill2_frame2.png").convert_alpha()
-        self.rogue_attack_sprite = pygame.image.load("rogue_skill4_frame4.png").convert_alpha()
+        self.warrior_attack_sprite = pygame.image.load("img/rogue_skill2_frame2.png").convert_alpha()
+        self.rogue_attack_sprite = pygame.image.load("img/rogue_skill4_frame4.png").convert_alpha()
         self.mage_attack_sprite = pygame.image.load("img/shot_fireball.png").convert_alpha()
 
 
@@ -167,23 +167,23 @@ class Game:
 
         if level_number == 1:
             pygame.mixer.music.stop()
-            pygame.mixer.music.load('Macky Gee - Obsessive.mp3')
+            pygame.mixer.music.load('audio/Macky Gee - Obsessive.mp3')
             pygame.mixer.music.play(-1, 37)
         elif level_number == 2:
             pygame.mixer.music.stop()
-            pygame.mixer.music.load('Macky Gee - Moments.mp3')
+            pygame.mixer.music.load('audio/Macky Gee - Moments.mp3')
             pygame.mixer.music.play(-1, 60)
         elif level_number == 3:
             pygame.mixer.music.stop()
-            pygame.mixer.music.load('Macky Gee - Tour.mp3')
+            pygame.mixer.music.load('audio/Macky Gee - Tour.mp3')
             pygame.mixer.music.play(-1, 61)
         elif level_number == 4:
             pygame.mixer.music.stop()
-            pygame.mixer.music.load('Macky Gee Ft. Stuart Rowe - Aftershock.mp3')
+            pygame.mixer.music.load('audio/Macky Gee Ft. Stuart Rowe - Aftershock.mp3')
             pygame.mixer.music.play(-1, 170)
         elif level_number == 5:
             pygame.mixer.music.stop()
-            pygame.mixer.music.load('Nettspend - Nothing Like U (Official Music Video).mp3')
+            pygame.mixer.music.load('audio/Nettspend - Nothing Like U (Official Music Video).mp3')
             pygame.mixer.music.play(-1, 0)
         else:
             level_number == 1
@@ -300,9 +300,63 @@ class Game:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.pause_game()
+                elif event.key == pygame.K_F1:
+                    end_screen = EndScreen(self)
+                    end_screen.display(victory=True)
+                    self.playing = False
+                elif event.key == pygame.K_F5:
+                    self.save_game()
+                elif event.key == pygame.K_F9:
+                    self.load_game()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     self.player.attack()
+
+    def save_game(self):
+        if callable(self.player.damage):
+            damage_value = self.player.damage
+        else:
+            damage_value = self.player.damage
+
+        save_data = {
+            'player_position_x': self.player.rect.x,
+            'player_position_y': self.player.rect.y,
+
+            'player_level': self.player.level,
+            'player_health': self.player.health,
+            'player_max_health': self.player.max_health,
+            'player_attack': damage_value,
+
+            'current_level': self.current_level,
+            'gold': self.gold,
+            'wave': self.wave,
+
+            'inventory': [item.id for item in self.player.inventory]
+        }
+        with open('savegame.txt', 'w') as save_file:
+            for key, value in save_data.items():
+                save_file.write(f"{key}={value}\n")
+
+    def load_game(self):
+        try:
+            save_data = {}
+            with open('savegame.txt', 'r') as save_file:
+                for line in save_file:
+                    if '=' in line:
+                        key, value = line.strip().split('=', 1)
+                        save_data[key] = value
+
+            self.player.rect.x = int(save_data.get('player_position_x', self.player.rect.x))
+            self.player.rect.y = int(save_data.get('player_position_y', self.player.rect.y))
+
+            try:
+                self.player.damage = int(save_data.get('player_damage', self.player.damage))
+            except ValueError:
+                print("Warning: Invalid attack value in save file. Using default.")
+                self.player.damage = self.player.damage
+
+        except Exception as e:
+            print(f"Error loading game: {e}")
 
     def pause_game(self):
         pause_menu = PauseMenu(self)
@@ -326,9 +380,14 @@ class Game:
                 self.wave_transition_pending = False
 
                 if self.next_wave == 1:
-                    self.game_state.current_level += 1
-                    self.game_state.current_wave = 1
-                    self.load_level(self.game_state.current_level)
+                    if self.game_state.current_level == 5:
+                        end_screen = EndScreen(self)
+                        end_screen.display(victory=True)
+                        self.playing = False
+                    else:
+                        self.game_state.current_level += 1
+                        self.game_state.current_wave = 1
+                        self.load_level(self.game_state.current_level)
                 elif self.next_wave == 5:
                     self.game_state.current_wave = self.next_wave
                     self.load_level(self.game_state.current_level)
@@ -393,7 +452,6 @@ class GameState:
         self.gold = 0
         self.max_level_reached = 1
 
-        # Player leveling attributes
         self.player_level = 1
         self.player_exp = 0
         self.available_points = 0
@@ -432,9 +490,9 @@ class PauseMenu:
 
     def adjust_stat(self, key):
         if self.game.game_state.available_points <= 0 and key == pygame.K_RIGHT:
-            return  # No points to spend
+            return
 
-        if self.selected_option == 0:  # Health
+        if self.selected_option == 0:
             if key == pygame.K_RIGHT:
                 self.game.game_state.health_points += 1
                 self.game.game_state.available_points -= 1
@@ -446,7 +504,7 @@ class PauseMenu:
                 self.game.player.max_health -= 10
                 self.game.player.health = min(self.game.player.health, self.game.player.max_health)
 
-        elif self.selected_option == 1:  # Stamina
+        elif self.selected_option == 1:
             if key == pygame.K_RIGHT:
                 self.game.game_state.stamina_points += 1
                 self.game.game_state.available_points -= 1
@@ -457,7 +515,7 @@ class PauseMenu:
                 self.game.player.max_stamina -= 5
                 self.game.player.stamina = min(self.game.player.stamina, self.game.player.max_stamina)
 
-        elif self.selected_option == 2:  # Damage
+        elif self.selected_option == 2:
             if key == pygame.K_RIGHT:
                 self.game.game_state.damage_points += 1
                 self.game.game_state.available_points -= 1
@@ -475,18 +533,15 @@ class PauseMenu:
             self.running = False
 
     def draw(self):
-        # Create a semi-transparent overlay
         overlay = pygame.Surface((WW, WH))
         overlay.set_alpha(200)
         overlay.fill((0, 0, 0))
         self.game.screen.blit(overlay, (0, 0))
 
-        # Draw title
         title_text = self.title_font.render("Character Stats", True, (255, 255, 255))
         title_rect = title_text.get_rect(center=(WW // 2, 80))
         self.game.screen.blit(title_text, title_rect)
 
-        # Draw player level and points
         level_text = self.font.render(f"Level: {self.game.game_state.player_level}", True, (255, 255, 255))
         self.game.screen.blit(level_text, (WW // 2 - 150, 130))
 
@@ -498,13 +553,12 @@ class PauseMenu:
                                        (255, 215, 0))
         self.game.screen.blit(points_text, (WW // 2 - points_text.get_width() // 2, 170))
 
-        # Draw stat options
         self.option_rects = []
         y_pos = 220
         for i, option in enumerate(self.options):
             color = (255, 255, 0) if i == self.selected_option else (255, 255, 255)
 
-            if i < 3:  # Stats options
+            if i < 3:
                 if i == 0:
                     value = self.game.game_state.health_points
                     effect = f"(Health: {self.game.player.max_health})"
@@ -524,8 +578,7 @@ class PauseMenu:
             self.option_rects.append(rect)
             y_pos += 50
 
-        # Draw controls hint
-        hint_text = self.font.render("Use ← → to adjust stats, ↑↓ to navigate", True, (200, 200, 200))
+        hint_text = self.font.render("Use LEFT and RIGHT to adjust stats, UP and DOWN to navigate", True, (200, 200, 200))
         hint_rect = hint_text.get_rect(center=(WW // 2, WH - 50))
         self.game.screen.blit(hint_text, hint_rect)
 
@@ -552,19 +605,16 @@ class TitleScreen:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     self.running = False
-                    # Show class selection screen after pressing enter
                     class_selection = ClassSelectionScreen(self.game)
                     class_selection.run()
 
     def draw(self):
         self.game.screen.fill(BLACK)
 
-        # Draw title
         title_text = self.title_font.render("RPG Adventure", True, WHITE)
         title_rect = title_text.get_rect(center=(WW // 2, 200))
         self.game.screen.blit(title_text, title_rect)
 
-        # Draw instructions
         instructions = self.font.render("Press ENTER to start", True, WHITE)
         instructions_rect = instructions.get_rect(center=(WW // 2, WH - 100))
         self.game.screen.blit(instructions, instructions_rect)
@@ -589,19 +639,19 @@ class ClassSelectionScreen:
                 'name': 'Mage',
                 'description': 'Magic user with ranged attacks and low health.',
                 'stats': {'health': 100, 'damage': 20, 'stamina': 120},
-                'image': None  # Will use your character spritesheet
+                'image': None
             },
             {
                 'name': 'Warrior',
                 'description': 'High health melee fighter who can hit multiple enemies with axes and greatswords.',
                 'stats': {'health': 150, 'damage': 15, 'stamina': 100},
-                'image': None  # Will use your character spritesheet
+                'image': None
             },
             {
                 'name': 'Rogue',
                 'description': 'Fast dagger-wielding fighter with high single-target damage.',
                 'stats': {'health': 120, 'damage': 18, 'stamina': 110},
-                'image': None  # Will use your character spritesheet
+                'image': None
             }
         ]
 
@@ -672,6 +722,53 @@ class ClassSelectionScreen:
             self.draw()
             self.game.clock.tick(FPS)
         return self.game.player_class
+
+
+class EndScreen:
+    def __init__(self, game):
+        self.game = game
+        self.font_large = pygame.font.Font(None, 74)
+        self.font_small = pygame.font.Font(None, 36)
+
+    def display(self, victory=False):
+        self.game.screen.fill((0, 0, 0))
+        print("eneded")
+
+        if victory:
+            title_text = self.font_large.render('Victory!', True, (0, 255, 0))
+            message = f"You escaped from Hel! Final score: {self.game.gold}"
+        else:
+            title_text = self.font_large.render('Game Over', True, (255, 0, 0))
+            message = f"You died on wave {self.game.wave}. Gold collected: {self.game.gold}"
+
+        message_text = self.font_small.render(message, True, (255, 255, 255))
+        restart_text = self.font_small.render("Press R to restart or Q to quit", True, (255, 255, 255))
+
+        title_rect = title_text.get_rect(center=(WW // 2, WH // 3))
+        message_rect = message_text.get_rect(center=(WW // 2, WH // 2))
+        restart_rect = restart_text.get_rect(center=(WW // 2, 2 * WH // 3))
+
+        self.game.screen.blit(title_text, title_rect)
+        self.game.screen.blit(message_text, message_rect)
+        self.game.screen.blit(restart_text, restart_rect)
+
+        pygame.display.flip()
+
+        waiting = True
+        while waiting:
+            self.game.clock.tick(FPS)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    waiting = False
+                    self.game.running = False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r:
+                        waiting = False
+                        self.game.game_state = GameState()
+                        self.game.new()
+                    elif event.key == pygame.K_q:
+                        waiting = False
+                        self.game.running = False
 
 
 class GameOverScreen:

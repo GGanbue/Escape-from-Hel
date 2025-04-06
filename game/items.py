@@ -6,7 +6,7 @@ class Item:
     def __init__(self, name, image, item_class, level_req=1):
         self.name = name
         self.image = image
-        self.item_class = item_class  # "warrior", "mage", or "rogue"
+        self.item_class = item_class
         self.level_req = level_req
 
 
@@ -39,7 +39,6 @@ def initialize_items(game):
             Weapon("Blade of the Ruined King", game.item_spritesheet.get_sprite(256, 0, TILESIZE, TILESIZE), "warrior", 65)
         ],
         "mage": [
-            # 10 mage weapons
             Weapon("Apprentice Staff", game.item_spritesheet.get_sprite(0, 320, TILESIZE, TILESIZE), "mage", 5),
             Weapon("Sun Wand", game.item_spritesheet.get_sprite(32, 320, TILESIZE, TILESIZE), "mage", 5),
             Weapon("Thorn Staff", game.item_spritesheet.get_sprite(64, 320, TILESIZE, TILESIZE), "mage", 7),
@@ -52,7 +51,6 @@ def initialize_items(game):
             Weapon("Shillelagh of the Old One", game.item_spritesheet.get_sprite(288, 320, TILESIZE, TILESIZE), "mage", 20)
         ],
         "rogue": [
-            # 10 rogue weapons
             Weapon("Rusty Dagger", game.item_spritesheet.get_sprite(0, 0, TILESIZE, TILESIZE), "rogue", 20),
             Weapon("Large Dagger", game.item_spritesheet.get_sprite(32, 0, TILESIZE, TILESIZE), "rogue", 20),
             Weapon("Sickle", game.item_spritesheet.get_sprite(0, 64, TILESIZE, TILESIZE), "rogue", 30),
@@ -68,7 +66,6 @@ def initialize_items(game):
 
     armors = {
         "warrior": [
-            # 5 warrior armors
             Armor("Leather Plate", game.item_spritesheet.get_sprite(0, 384, TILESIZE, TILESIZE), "warrior", 10),
             Armor("Iron Chainmail", game.item_spritesheet.get_sprite(128, 384, TILESIZE, TILESIZE), "warrior", 15),
             Armor("Knight's Helm", game.item_spritesheet.get_sprite(160, 480, TILESIZE, TILESIZE), "warrior", 20),
@@ -76,7 +73,6 @@ def initialize_items(game):
             Armor("Warlord's Plate", game.item_spritesheet.get_sprite(160, 384, TILESIZE, TILESIZE), "warrior", 30)
         ],
         "mage": [
-            # 5 mage armors
             Armor("Cloth Robe", game.item_spritesheet.get_sprite(0, 384, TILESIZE, TILESIZE), "mage", 5),
             Armor("Enchanted Cloak", game.item_spritesheet.get_sprite(64, 384, TILESIZE, TILESIZE), "mage", 8),
             Armor("Hat of Wizardry", game.item_spritesheet.get_sprite(64, 480, TILESIZE, TILESIZE), "mage", 11),
@@ -84,7 +80,6 @@ def initialize_items(game):
             Armor("Ring of Hel", game.item_spritesheet.get_sprite(96, 544, TILESIZE, TILESIZE), "mage", 17),
         ],
         "rogue": [
-            # 5 rogue armors
             Armor("Leather Vest", game.item_spritesheet.get_sprite(0, 384, TILESIZE, TILESIZE), "rogue", 7),
             Armor("Shadow Garb", game.item_spritesheet.get_sprite(96, 160, TILESIZE, TILESIZE), "rogue", 12),
             Armor("Assassins Hood", game.item_spritesheet.get_sprite(0, 480, TILESIZE, TILESIZE), "rogue", 17),
@@ -138,14 +133,11 @@ class InventoryScreen:
                 return
 
             if item.type == "weapon":
-                # Check if already equipped
                 if self.game.player.equipped_weapon == item:
-                    # Unequip
                     self.game.player.equipped_weapon = None
                     self.game.player.damage = self.game.player.damage
                     self.game.set_direct_notification(f"Unequipped {item.name}")
                 else:
-                    # Equip
                     self.game.player.equipped_weapon = item
                     self.game.player.damage = self.game.player.damage + item.damage
                     self.game.set_direct_notification(f"Equipped {item.name}")
@@ -185,15 +177,12 @@ class InventoryScreen:
                 item = self.game.player.inventory[i]
                 bg_color = (100, 100, 255) if i == self.selected_index else (70, 70, 70)
 
-                # Draw item background
                 pygame.draw.rect(self.game.screen, bg_color,
                                  (WW // 4, start_y + (i - self.scroll_offset) * 50, WW // 2, 40))
 
-                # Draw item name
                 item_text = self.font.render(f"{item.name}", True, (255, 255, 255))
                 self.game.screen.blit(item_text, (WW // 4 + 10, start_y + (i - self.scroll_offset) * 50 + 10))
 
-                # Draw item type and stats
                 if hasattr(item, 'damage'):
                     stat_text = self.font.render(f"Damage: {item.damage}", True, (255, 200, 100))
                 elif hasattr(item, 'health'):
@@ -203,7 +192,6 @@ class InventoryScreen:
 
                 self.game.screen.blit(stat_text, (WW // 2, start_y + (i - self.scroll_offset) * 50 + 10))
 
-            # Draw scroll indicators if needed
             if self.scroll_offset > 0:
                 up_text = self.font.render("▲", True, (255, 255, 255))
                 self.game.screen.blit(up_text, (WW // 2, 70))
@@ -212,7 +200,6 @@ class InventoryScreen:
                 down_text = self.font.render("▼", True, (255, 255, 255))
                 self.game.screen.blit(down_text, (WW // 2, start_y + self.items_per_page * 50 + 10))
 
-            # Draw equipped items
         if self.game.player.equipped_weapon:
             weapon_text = self.font.render(f"Equipped Weapon: {self.game.player.equipped_weapon.name}", True,
                                            (255, 200, 100))
@@ -223,7 +210,6 @@ class InventoryScreen:
                                           (100, 200, 255))
             self.game.screen.blit(armor_text, (50, WH - 50))
 
-            # Draw controls hint
         hint_text = self.font.render("↑↓: Navigate | Enter: Equip | ESC: Back", True, (200, 200, 200))
         self.game.screen.blit(hint_text, (WW // 2 - hint_text.get_width() // 2, WH - 30))
 
