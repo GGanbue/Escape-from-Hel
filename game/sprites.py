@@ -378,7 +378,6 @@ class Enemy(pygame.sprite.Sprite):
                 self.last_attack_time = current_time
                 self.game.player.take_damage(self.damage)
 
-
     def detect_and_handle_corner_stuck(self, prev_x, prev_y):
         if not hasattr(self, 'stuck_count'):
             self.stuck_count = 0
@@ -397,15 +396,17 @@ class Enemy(pygame.sprite.Sprite):
             self.stuck_count = 0
             self.corner_adjustment_active = False
 
-        if self.stuck_count > 5 and current_time - self.last_stuck_time > 500:
+        if self.stuck_count > 3 and current_time - self.last_stuck_time > 300:
             self.last_stuck_time = current_time
             self.corner_adjustment_active = True
             self.corner_adjustment_time = current_time
 
+            self.update_path()
+
             self.find_corner_adjustment_direction()
 
         if self.corner_adjustment_active:
-            if current_time - self.corner_adjustment_time < 500:
+            if current_time - self.corner_adjustment_time < 800:
                 self.apply_corner_adjustment()
             else:
                 self.corner_adjustment_active = False
@@ -413,12 +414,17 @@ class Enemy(pygame.sprite.Sprite):
                 self.path_update_time = current_time
 
     def find_corner_adjustment_direction(self):
-        directions = []
-        test_distance = TILESIZE * 1.5
+        directions = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)]
+        test_distance = TILESIZE * 2
 
-        for dx, dy in [(0, -1), (1, 0), (0, 1), (-1, 0)]:
+        clear_directions = []
+
+        for dx, dy in directions:
             test_x = self.world_x + dx * test_distance
             test_y = self.world_y + dy * test_distance
+
+            if test_x < 0 or test_x >= 40 * TILESIZE or test_y < 0 or test_y >= 30 * TILESIZE:
+                continue
 
             test_rect = pygame.Rect(test_x, test_y, TILESIZE, TILESIZE)
 
@@ -430,54 +436,44 @@ class Enemy(pygame.sprite.Sprite):
                     break
 
             if clear:
-                directions.append((dx, dy))
+                clear_directions.append((dx, dy))
 
-        if directions:
-            perpendicular = []
-            for dx, dy in directions:
-                if abs(self.velocity_x) > abs(self.velocity_y):
-                    if dy != 0 and dx == 0:
-                        perpendicular.append((dx, dy))
-                else:
-                    if dx != 0 and dy == 0:
-                        perpendicular.append((dx, dy))
+        if clear_directions:
+            current_dir = [0, 0]
+            vel_magnitude = math.sqrt(self.velocity_x ** 2 + self.velocity_y ** 2)
+            if vel_magnitude > 0.1:
+                current_dir = [self.velocity_x / vel_magnitude, self.velocity_y / vel_magnitude]
 
-            if perpendicular:
-                self.corner_adjustment_direction = random.choice(perpendicular)
-            else:
-                self.corner_adjustment_direction = random.choice(directions)
+            best_dir = None
+            best_diff = -1
+            for dx, dy in clear_directions:
+                dir_diff = (dx - current_dir[0]) ** 2 + (dy - current_dir[1]) ** 2
+                if dir_diff > best_diff:
+                    best_diff = dir_diff
+                    best_dir = (dx, dy)
+
+            self.corner_adjustment_direction = best_dir
         else:
-            diagonals = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
-            for dx, dy in diagonals:
-                test_x = self.world_x + dx * test_distance
-                test_y = self.world_y + dy * test_distance
-
-                test_rect = pygame.Rect(test_x, test_y, TILESIZE, TILESIZE)
-
-                clear = True
-                for block in self.game.blocks:
-                    block_rect = pygame.Rect(block.world_x, block.world_y, TILESIZE, TILESIZE)
-                    if test_rect.colliderect(block_rect):
-                        clear = False
-                        break
-
-                if clear:
-                    self.corner_adjustment_direction = (dx, dy)
-                    return
-
             self.corner_adjustment_direction = (-self.velocity_x, -self.velocity_y)
 
     def apply_corner_adjustment(self):
         if self.corner_adjustment_direction:
             dx, dy = self.corner_adjustment_direction
 
-            adjustment_strength = 1.5
+            adjustment_strength = 2.5
 
             self.world_x += dx * ENEMY_SPEED * adjustment_strength
             self.world_y += dy * ENEMY_SPEED * adjustment_strength
 
             self.velocity_x = dx * self.max_speed
             self.velocity_y = dy * self.max_speed
+
+            if self.stuck_count > 10:
+                valid_pos = self.game.find_valid_position(int(self.world_x // TILESIZE), int(self.world_y // TILESIZE))
+                if valid_pos:
+                    self.world_x = valid_pos[0] * TILESIZE
+                    self.world_y = valid_pos[1] * TILESIZE
+                    self.stuck_count = 0
 
     def movement(self):
         current_time = pygame.time.get_ticks()
@@ -586,6 +582,7 @@ class Enemy(pygame.sprite.Sprite):
         self.path_index = 0
 
     def collide_blocks(self, direction):
+        buffer = 2
         temp_rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
         for block in self.game.blocks:
@@ -593,17 +590,17 @@ class Enemy(pygame.sprite.Sprite):
             if temp_rect.colliderect(block_rect):
                 if direction == 'x':
                     if self.x_change > 0:
-                        self.world_x = block_rect.left - TILESIZE
+                        self.world_x = block_rect.left - TILESIZE - buffer
                     if self.x_change < 0:
-                        self.world_x = block_rect.right
+                        self.world_x = block_rect.right + buffer
                     self.x_change = 0
                     self.velocity_x = 0
 
                 if direction == 'y':
                     if self.y_change > 0:
-                        self.world_y = block_rect.top - TILESIZE
+                        self.world_y = block_rect.top - TILESIZE - buffer
                     if self.y_change < 0:
-                        self.world_y = block_rect.bottom
+                        self.world_y = block_rect.bottom + buffer
                     self.y_change = 0
                     self.velocity_y = 0
 
@@ -749,11 +746,6 @@ class Attack(pygame.sprite.Sprite):
             screen_x = self.world_x - self.game.camera_offset_x
             screen_y = self.world_y - self.game.camera_offset_y
             self.rect.center = (screen_x, screen_y)
-
-            for block in self.game.blocks:
-                if self.rect.colliderect(block.rect):
-                    self.kill()
-                    return
 
         hits = []
         for enemy in self.game.enemies:

@@ -126,82 +126,6 @@ class Game:
 
         self.load_level(self.game_state.current_level)
 
-    def load_level(self, level_number):
-        self.current_level = level_number
-        if hasattr(self, 'player'):
-            old_inventory = self.player.inventory.copy()
-            old_equipped_weapon = self.player.equipped_weapon
-            old_equipped_armor = self.player.equipped_armor
-        else:
-            old_inventory = []
-            old_equipped_weapon = None
-            old_equipped_armor = None
-
-        if hasattr(self, 'all_sprites'):
-            for sprite in self.all_sprites:
-                sprite.kill()
-
-        self.all_sprites = pygame.sprite.LayeredUpdates()
-        self.blocks = pygame.sprite.LayeredUpdates()
-        self.enemies = pygame.sprite.LayeredUpdates()
-        self.attacks = pygame.sprite.LayeredUpdates()
-
-        if self.game_state.current_wave == 5:
-            if level_number == 1:
-                self.createTilemap(level1_boss_map)
-            elif level_number == 2:
-                self.createTilemap(level2_boss_map)
-            elif level_number == 3:
-                self.createTilemap(level3_boss_map)
-            elif level_number == 4:
-                self.createTilemap(level4_boss_map)
-            elif level_number == 5:
-                self.createTilemap(level5_boss_map)
-            else:
-                self.createTilemap(level1_boss_map)
-        else:
-            shape_types = ['rectangle', 'circle']
-            random_shape = random.choice(shape_types)
-            random_map = generate_shaped_map(40, 30, shape_type=random_shape)
-            self.createTilemap(random_map)
-
-        if level_number == 1:
-            pygame.mixer.music.stop()
-            pygame.mixer.music.load('audio/Macky Gee - Obsessive.mp3')
-            pygame.mixer.music.play(-1, 37)
-        elif level_number == 2:
-            pygame.mixer.music.stop()
-            pygame.mixer.music.load('audio/Macky Gee - Moments.mp3')
-            pygame.mixer.music.play(-1, 60)
-        elif level_number == 3:
-            pygame.mixer.music.stop()
-            pygame.mixer.music.load('audio/Macky Gee - Tour.mp3')
-            pygame.mixer.music.play(-1, 61)
-        elif level_number == 4:
-            pygame.mixer.music.stop()
-            pygame.mixer.music.load('audio/Macky Gee Ft. Stuart Rowe - Aftershock.mp3')
-            pygame.mixer.music.play(-1, 170)
-        elif level_number == 5:
-            pygame.mixer.music.stop()
-            pygame.mixer.music.load('audio/Nettspend - Nothing Like U (Official Music Video).mp3')
-            pygame.mixer.music.play(-1, 0)
-        else:
-            level_number == 1
-
-        self.spawn_wave(level_number, self.game_state.current_wave)
-
-        self.game_state.current_levels = level_number
-        if level_number > self.game_state.max_level_reached:
-            self.game_state.max_level_reached = level_number
-
-        if hasattr(self, 'player'):
-            self.player.inventory = old_inventory
-            self.player.equipped_weapon = old_equipped_weapon
-            self.player.equipped_armor = old_equipped_armor
-
-            if self.player.equipped_weapon:
-                self.player.damage = self.player.damage + self.player.equipped_weapon.damage
-
     def spawn_wave(self, level, wave):
         for enemy in self.enemies:
             enemy.kill()
@@ -313,50 +237,293 @@ class Game:
                     self.player.attack()
 
     def save_game(self):
-        if callable(self.player.damage):
-            damage_value = self.player.damage
-        else:
-            damage_value = self.player.damage
+        map_layout = []
+        for y in range(30):
+            row = []
+            for x in range(40):
+                tile_type = ' '
+
+                for block in self.blocks:
+                    if block.world_x // TILESIZE == x and block.world_y // TILESIZE == y:
+                        tile_type = 'B'
+                        break
+
+                if self.player.world_x // TILESIZE == x and self.player.world_y // TILESIZE == y:
+                    tile_type = 'P'
+
+                row.append(tile_type)
+            map_layout.append(row)
+
+        enemy_data = []
+        for enemy in self.enemies:
+            enemy_info = {
+                'x': enemy.world_x,
+                'y': enemy.world_y,
+                'level': enemy.level,
+                'health': enemy.health,
+                'max_health': enemy.max_health,
+                'damage': enemy.damage
+            }
+            enemy_data.append(enemy_info)
 
         save_data = {
-            'player_position_x': self.player.rect.x,
-            'player_position_y': self.player.rect.y,
-
-            'player_level': self.player.level,
-            'player_health': self.player.health,
-            'player_max_health': self.player.max_health,
-            'player_attack': damage_value,
-
-            'current_level': self.current_level,
-            'gold': self.gold,
-            'wave': self.wave,
-
-            'inventory': [item.id for item in self.player.inventory]
+            'player': {
+                'position_x': self.player.world_x,
+                'position_y': self.player.world_y,
+                'level': self.player.level,
+                'health': self.player.health,
+                'max_health': self.player.max_health,
+                'damage': self.player.damage,
+                'stamina': self.player.stamina,
+                'max_stamina': self.player.max_stamina,
+                'exp': self.player.exp,
+                'exp_to_next_level': self.player.exp_to_next_level,
+                'player_class': self.player.player_class
+            },
+            'game_state': {
+                'current_level': self.current_level,
+                'current_wave': self.game_state.current_wave,
+                'gold': self.gold,
+                'available_points': self.game_state.available_points,
+                'health_points': self.game_state.health_points,
+                'stamina_points': self.game_state.stamina_points,
+                'damage_points': self.game_state.damage_points,
+                'max_level_reached': self.game_state.max_level_reached,
+                'player_level': self.player.level,
+                'player_exp': self.player.exp
+            },
+            'inventory': [],
+            'equipped': {
+                'weapon': None,
+                'armor': None
+            },
+            'map_layout': map_layout,
+            'enemies': enemy_data
         }
-        with open('savegame.txt', 'w') as save_file:
-            for key, value in save_data.items():
-                save_file.write(f"{key}={value}\n")
+
+        for item in self.player.inventory:
+            item_data = {
+                'name': item.name,
+                'type': item.type,
+                'item_class': item.item_class,
+                'level_req': item.level_req
+            }
+
+            if hasattr(item, 'damage'):
+                item_data['damage'] = item.damage
+            if hasattr(item, 'health'):
+                item_data['health'] = item.health
+
+            save_data['inventory'].append(item_data)
+
+        if self.player.equipped_weapon:
+            save_data['equipped']['weapon'] = self.player.equipped_weapon.name
+
+        if self.player.equipped_armor:
+            save_data['equipped']['armor'] = self.player.equipped_armor.name
+
+        with open('savegame.json', 'w') as save_file:
+            json.dump(save_data, save_file, indent=2)
+
+        self.set_direct_notification("Game saved successfully", 2000)
 
     def load_game(self):
         try:
-            save_data = {}
-            with open('savegame.txt', 'r') as save_file:
-                for line in save_file:
-                    if '=' in line:
-                        key, value = line.strip().split('=', 1)
-                        save_data[key] = value
+            with open('savegame.json', 'r') as save_file:
+                save_data = json.load(save_file)
 
-            self.player.rect.x = int(save_data.get('player_position_x', self.player.rect.x))
-            self.player.rect.y = int(save_data.get('player_position_y', self.player.rect.y))
+            self.loading_saved_game = True
 
-            try:
-                self.player.damage = int(save_data.get('player_damage', self.player.damage))
-            except ValueError:
-                print("Warning: Invalid attack value in save file. Using default.")
-                self.player.damage = self.player.damage
+            if 'map_layout' in save_data:
+                self.saved_map_layout = save_data['map_layout']
+
+            if 'enemies' in save_data:
+                self.saved_enemy_data = save_data['enemies']
+
+            game_state_data = save_data.get('game_state', {})
+            self.current_level = game_state_data.get('current_level', 1)
+            self.game_state.current_wave = game_state_data.get('current_wave', 1)
+            self.gold = game_state_data.get('gold', 0)
+            self.game_state.available_points = game_state_data.get('available_points', 0)
+            self.game_state.health_points = game_state_data.get('health_points', 0)
+            self.game_state.stamina_points = game_state_data.get('stamina_points', 0)
+            self.game_state.damage_points = game_state_data.get('damage_points', 0)
+            self.game_state.max_level_reached = game_state_data.get('max_level_reached', 1)
+            self.game_state.player_level = game_state_data.get('player_level', 1)
+            self.game_state.player_exp = game_state_data.get('player_exp', 0)
+
+            player_data = save_data.get('player', {})
+            self.player.world_x = player_data.get('position_x', self.player.world_x)
+            self.player.world_y = player_data.get('position_y', self.player.world_y)
+            self.player.level = player_data.get('level', self.game_state.player_level)
+            self.player.health = player_data.get('health', 100)
+            self.player.max_health = player_data.get('max_health', 100)
+            self.player.damage = player_data.get('damage', 10)
+            self.player.stamina = player_data.get('stamina', 100)
+            self.player.max_stamina = player_data.get('max_stamina', 100)
+            self.player.exp = player_data.get('exp', self.game_state.player_exp)
+            self.player.exp_to_next_level = player_data.get('exp_to_next_level', 100)
+            self.player.player_class = player_data.get('player_class', 'mage')
+
+            self.player.inventory = []
+
+            for item_data in save_data.get('inventory', []):
+                item_name = item_data.get('name')
+                item_type = item_data.get('type')
+                item_class = item_data.get('item_class')
+
+                found_item = None
+                if item_type == 'weapon':
+                    for weapon in self.weapons.get(item_class, []):
+                        if weapon.name == item_name:
+                            found_item = weapon
+                            break
+                elif item_type == 'armor':
+                    for armor in self.armors.get(item_class, []):
+                        if armor.name == item_name:
+                            found_item = armor
+                            break
+
+                if found_item:
+                    self.player.inventory.append(found_item)
+
+            equipped_data = save_data.get('equipped', {})
+            weapon_name = equipped_data.get('weapon')
+            armor_name = equipped_data.get('armor')
+
+            self.player.equipped_weapon = None
+            self.player.equipped_armor = None
+
+            for item in self.player.inventory:
+                if item.type == 'weapon' and item.name == weapon_name:
+                    self.player.equipped_weapon = item
+                    self.player.damage += item.damage
+                elif item.type == 'armor' and item.name == armor_name:
+                    self.player.equipped_armor = item
+                    self.player.max_health += item.health
+
+            self.ui.gold = self.gold
+            self.ui.wave = self.game_state.current_wave
+
+            self.load_level(self.current_level)
+
+            self.set_direct_notification("Game loaded successfully", 2000)
 
         except Exception as e:
+            self.set_direct_notification(f"Error loading game: {e}", 3000)
             print(f"Error loading game: {e}")
+
+    def load_level(self, level_number):
+        self.current_level = level_number
+
+        old_inventory = []
+        old_equipped_weapon = None
+        old_equipped_armor = None
+
+        if hasattr(self, 'player') and self.player is not None and hasattr(self.player, 'inventory'):
+            old_inventory = self.player.inventory.copy()
+            old_equipped_weapon = self.player.equipped_weapon
+            old_equipped_armor = self.player.equipped_armor
+
+        if hasattr(self, 'all_sprites'):
+            for sprite in self.all_sprites:
+                sprite.kill()
+
+        self.all_sprites = pygame.sprite.LayeredUpdates()
+        self.blocks = pygame.sprite.LayeredUpdates()
+        self.enemies = pygame.sprite.LayeredUpdates()
+        self.attacks = pygame.sprite.LayeredUpdates()
+
+        if hasattr(self, 'loading_saved_game') and self.loading_saved_game and hasattr(self, 'saved_map_layout'):
+            self.createTilemap(self.saved_map_layout)
+
+            if hasattr(self, 'saved_enemy_data') and self.saved_enemy_data:
+                for enemy_data in self.saved_enemy_data:
+                    if self.game_state.current_wave == 5:
+                        texture = self.boss_textures.get(level_number, self.boss_textures[1])
+                    else:
+                        texture = self.enemy_textures.get(level_number, self.enemy_textures[1])
+
+                    enemy = Enemy(
+                        self,
+                        enemy_data['x'] // TILESIZE,
+                        enemy_data['y'] // TILESIZE,
+                        texture,
+                        level=enemy_data.get('level', 1)
+                    )
+
+                    enemy.world_x = enemy_data['x']
+                    enemy.world_y = enemy_data['y']
+
+                    enemy.health = enemy_data.get('health', enemy.max_health)
+                    enemy.max_health = enemy_data.get('max_health', enemy.max_health)
+                    enemy.damage = enemy_data.get('damage', enemy.damage)
+            else:
+                self.spawn_wave(level_number, self.game_state.current_wave)
+
+            self.loading_saved_game = False
+        else:
+            if self.game_state.current_wave == 5:
+                if level_number == 1:
+                    self.createTilemap(level1_boss_map)
+                elif level_number == 2:
+                    self.createTilemap(level2_boss_map)
+                elif level_number == 3:
+                    self.createTilemap(level3_boss_map)
+                elif level_number == 4:
+                    self.createTilemap(level4_boss_map)
+                elif level_number == 5:
+                    self.createTilemap(level5_boss_map)
+                else:
+                    self.createTilemap(level1_boss_map)
+            else:
+                shape_types = ['rectangle', 'circle']
+                random_shape = random.choice(shape_types)
+                random_map = generate_shaped_map(40, 30, shape_type=random_shape)
+                self.createTilemap(random_map)
+
+            self.spawn_wave(level_number, self.game_state.current_wave)
+
+        self.game_state.current_levels = level_number
+        if level_number > self.game_state.max_level_reached:
+            self.game_state.max_level_reached = level_number
+
+        if hasattr(self, 'player') and self.player is not None:
+            self.player.inventory = old_inventory
+            self.player.equipped_weapon = old_equipped_weapon
+            self.player.equipped_armor = old_equipped_armor
+
+            if self.player.equipped_weapon:
+                self.player.damage += self.player.equipped_weapon.damage
+
+            if self.player.equipped_armor:
+                self.player.max_health += self.player.equipped_armor.health
+
+        if level_number == 1:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('audio/Macky Gee - Obsessive.mp3')
+            pygame.mixer.music.play(-1, 37)
+        elif level_number == 2:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('audio/Macky Gee - Moments.mp3')
+            pygame.mixer.music.play(-1, 60)
+        elif level_number == 3:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('audio/Macky Gee - Tour.mp3')
+            pygame.mixer.music.play(-1, 61)
+        elif level_number == 4:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('audio/Macky Gee Ft. Stuart Rowe - Aftershock.mp3')
+            pygame.mixer.music.play(-1, 170)
+        elif level_number == 5:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('audio/Nettspend - Nothing Like U (Official Music Video).mp3')
+            pygame.mixer.music.play(-1, 0)
+        else:
+            level_number = 1
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('audio/Macky Gee - Obsessive.mp3')
+            pygame.mixer.music.play(-1, 37)
 
     def pause_game(self):
         pause_menu = PauseMenu(self)
