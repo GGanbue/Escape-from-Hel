@@ -1,3 +1,5 @@
+import random
+
 WW = 640
 WH = 480
 TILESIZE = 32
@@ -16,51 +18,218 @@ BLUE = (0, 0, 255)
 LIGHTGREY = (150, 150, 150)
 WHITE = (255, 255, 255)
 
-level1_wave1_enemies = [(3, 2), (16, 12)]  # List of (x, y) coordinates for enemies
-level1_wave2_enemies = [(5, 3), (15, 7), (10, 10)]
-level1_wave3_enemies = [(2, 2), (17, 2), (2, 12)]
-level1_wave4_enemies = [(5, 5), (15, 5), (5, 10), (15, 10)]
-level1_wave5_enemies = [(3, 3), (16, 3), (3, 12), (16, 12)]
 
-# Define wave maps for level 2
-level2_wave1_enemies = [(5, 3), (15, 7)]
-# Add more waves for level 2...
+def generate_shaped_map(width, height, shape_type='rectangle'):
+    # Start with an empty map (all block tiles)
+    map = [['B' for _ in range(width)] for _ in range(height)]
 
-# Group waves by level
+    if shape_type == 'rectangle':
+        # Create rectangular play area
+        for y in range(1, height - 1):
+            for x in range(1, width - 1):
+                map[y][x] = '.'  # Floor tiles inside the rectangle
+
+    elif shape_type == 'circle':
+        # Create circular play area
+        center_x = width // 2
+        center_y = height // 2
+        radius = min(width, height) // 2 - 1
+
+        for y in range(height):
+            for x in range(width):
+                # Calculate distance from center
+                distance = ((x - center_x) ** 2 + (y - center_y) ** 2) ** 0.5
+
+                # Only place floor tiles inside the circle
+                if distance < radius:
+                    map[y][x] = '.'
+
+    # Add random small connected shapes of blocks
+    num_shapes = random.randint(3, 7)  # Number of shapes to add
+
+    for _ in range(num_shapes):
+        # Choose a random starting point that's a floor tile
+        attempts = 0
+        while attempts < 100:  # Prevent infinite loop
+            start_x = random.randint(5, width - 6)
+            start_y = random.randint(5, height - 6)
+            if map[start_y][start_x] == '.':
+                break
+            attempts += 1
+
+        if attempts >= 100:
+            continue
+
+        shape_size = random.randint(10, 20)
+        blocks_placed = 0
+        blocks = [(start_x, start_y)]
+
+        while blocks_placed < shape_size and blocks:
+            x, y = blocks.pop(0)
+            if map[y][x] == '.':
+                map[y][x] = 'B'
+                blocks_placed += 1
+
+                directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+                random.shuffle(directions)
+
+                for dx, dy in directions:
+                    nx, ny = x + dx, y + dy
+                    if (0 < nx < width - 1 and 0 < ny < height - 1 and
+                            map[ny][nx] == '.' and
+                            random.random() < 0.7):  # 70% chance to grow in this direction
+                        blocks.append((nx, ny))
+
+    # Ensure player spawn area is clear
+    px, py = width // 2, height // 2  # Place player in center
+    # Clear a 3x3 area around player spawn
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            ny, nx = py + dy, px + dx
+            if 0 <= ny < height and 0 <= nx < width:
+                map[ny][nx] = '.'
+
+    map[py][px] = 'P'
+
+    return [''.join(row) for row in map]
+
+
 level_waves = {
-    1: [level1_wave1_enemies, level1_wave2_enemies, level1_wave3_enemies, level1_wave4_enemies, level1_wave5_enemies],
-    2: [level2_wave1_enemies]  # Add more waves for level 2
+    1: {
+        4: [
+            (5, 5), (10, 5), (15, 5),
+            (5, 10), (15, 10),
+            (10, 12)
+        ]
+    },
+    2: {
+        4: [
+            (5, 5), (10, 5), (15, 5),
+            (5, 10), (15, 10),
+            (10, 3), (10, 12)
+        ]
+    },
+    3: {
+        4: [
+            (6, 6), (12, 6), (18, 6),
+            (6, 10), (18, 10),
+            (12, 3), (12, 12)
+        ]
+    },
+    4: {
+        4: [
+            (5, 5), (10, 5), (15, 5),
+            (5, 10), (15, 10),
+            (10, 3), (10, 12),
+            (3, 8), (18, 8)
+        ]
+    },
+    5: {
+        4: [
+            (5, 5), (10, 5), (15, 5),
+            (5, 10), (15, 10),
+            (10, 3), (10, 12),
+            (3, 8), (18, 8),
+            (8, 8), (12, 8)
+        ]
+    }
 }
 
-level1_map = [
-    'BBBBBBBBBBBBBBBBBBBB',
-    'B..E...............B',
-    'B..................B',
-    'B....BBB...........B',
-    'B..................B',
-    'B........P.........B',
-    'B..................B',
-    'B..................B',
-    'B.....BBB..........B',
-    'B.......B..........B',
-    'B.......B.....E....B',
-    'B..................B',
-    'B..................B',
-    'B..................B',
-    'BBBBBBBBBBBBBBBBBBBB',
 
+
+
+
+level1_boss_map = [
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B...........P................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
 ]
 
+level2_boss_map = [
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    'B............................B',
+    'B............................B',
+    'B.......BBBB......BBBB.......B',
+    'B............................B',
+    'B............................B',
+    'B...........P................B',
+    'B............................B',
+    'B............................B',
+    'B.......BBBB......BBBB.......B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+]
 
-level2_map = [
-    'BBBBBBBBBBBBBBBBBBBB',
-    'B..................B',
-    'B..BBB.............B',
-    'B.........E........B',
-    'B........P.........B',
-    'B..................B',
-    'B.........E........B',
-    'B..................B',
-    'B..................B',
-    'BBBBBBBBBBBBBBBBBBBB'
+level3_boss_map = [
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    'B............................B',
+    'B............................B',
+    'B....BB................BB....B',
+    'B...B..B..............B..B...B',
+    'B...B..B..............B..B...B',
+    'B...B..B......P.......B..B...B',
+    'B...B..B..............B..B...B',
+    'B...B..B..............B..B...B',
+    'B....BB................BB....B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+]
+
+level4_boss_map = [
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    'B............................B',
+    'B............................B',
+    'B...BBBBBB........BBBBBB.....B',
+    'B...B.................B......B',
+    'B...B.................B......B',
+    'B...B........P........B......B',
+    'B...B.................B......B',
+    'B...B.................B......B',
+    'B...BBBBBB........BBBBBB.....B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+]
+
+level5_boss_map = [
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B......BBBBBBBBBBBBBB........B',
+    'B............................B',
+    'B.............P..............B',
+    'B......B.....................B',
+    'B......BBBBBBBBBBBBBB........B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'B............................B',
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
 ]

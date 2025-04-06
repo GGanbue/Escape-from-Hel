@@ -126,7 +126,7 @@ class Player(pygame.sprite.Sprite):
 
     def attack(self):
         current_time = pygame.time.get_ticks()
-        if hasattr(self, 'last_attack_time') and current_time - self.last_attack_time < 750:
+        if hasattr(self, 'last_attack_time') and current_time - self.last_attack_time < 50:
             return
 
         self.last_attack_time = current_time
@@ -147,7 +147,7 @@ class Player(pygame.sprite.Sprite):
 
 
 class Block(pygame.sprite.Sprite):
-    def __init__(self, game, x, y):
+    def __init__(self, game, x, y, image=None):
         self.game = game
         self._layer = BLOCK_LAYER
         self.groups = self.game.all_sprites, self.game.blocks
@@ -158,11 +158,14 @@ class Block(pygame.sprite.Sprite):
 
         self.rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
-        self.image = self.game.terrain_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE)
+        if image:
+            self.image = image
+        else:
+            self.image = self.game.terrain_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE)
 
 
 class Ground(pygame.sprite.Sprite):
-    def __init__(self, game, x, y):
+    def __init__(self, game, x, y, image=None):
         self.game = game
         self._layer = GROUND_LAYER
         self.groups = self.game.all_sprites
@@ -173,11 +176,14 @@ class Ground(pygame.sprite.Sprite):
 
         self.rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
 
-        self.image = self.game.terrain_spritesheet.get_sprite(0, 192, TILESIZE, TILESIZE)
+        if image:
+            self.image = image
+        else:
+            self.image = self.game.terrain_spritesheet.get_sprite(0, 192, TILESIZE, TILESIZE)
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, game, x, y):
+    def __init__(self, game, x, y, image=None):
         super().__init__()
 
         self.game = game
@@ -191,7 +197,12 @@ class Enemy(pygame.sprite.Sprite):
         self.y_change = 0
         self.facing = 'left'
         self.rect = pygame.Rect(self.world_x, self.world_y, TILESIZE, TILESIZE)
-        self.image = self.game.enemy_spritesheet.get_sprite(64, 0, TILESIZE, TILESIZE)
+
+        if image:
+            self.image = image
+        else:
+            self.image = self.game.enemy_spritesheet.get_sprite(64, 0, TILESIZE, TILESIZE)
+
         self.image.set_colorkey(BLACK)
 
         self.max_health = 50
@@ -235,10 +246,6 @@ class Enemy(pygame.sprite.Sprite):
                 self.last_attack_time = current_time
                 self.game.player.take_damage(10)
 
-        if hasattr(self, 'hit_flash') and self.hit_flash:
-            if pygame.time.get_ticks() - self.hit_time > 100:
-                self.hit_flash = False
-            self.image.fill((255, 0, 0), special_flags=pygame.BLEND_RGB_MULT)
 
     def detect_and_handle_corner_stuck(self, prev_x, prev_y):
         if not hasattr(self, 'stuck_count'):
@@ -535,7 +542,7 @@ class Attack(pygame.sprite.Sprite):
 
         self.direction = direction
         self.speed = 10
-        self.damage = 50
+        self.damage = 20
 
     def update(self):
         self.world_x += math.cos(self.direction) * self.speed

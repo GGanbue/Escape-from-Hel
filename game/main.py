@@ -20,6 +20,38 @@ class Game:
         self.item_spritesheet = Spritesheet('img/32rogues/items.png')
         self.fireball = Spritesheet('img/shot_fireball.png')
 
+        self.block_textures = {
+            1: self.terrain_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE),
+            2: self.terrain_spritesheet.get_sprite(0, 0, TILESIZE, TILESIZE),
+            3: self.terrain_spritesheet.get_sprite(0, 128, TILESIZE, TILESIZE),
+            4: self.terrain_spritesheet.get_sprite(96, 608, TILESIZE, TILESIZE),
+            5: self.terrain_spritesheet.get_sprite(0, 96, TILESIZE, TILESIZE)
+        }
+
+        self.enemy_textures = {
+            1: self.enemy_spritesheet.get_sprite(64, 0, TILESIZE, TILESIZE),
+            2: self.enemy_spritesheet.get_sprite(0, 32, TILESIZE, TILESIZE),
+            3: self.enemy_spritesheet.get_sprite(224, 192, TILESIZE, TILESIZE),
+            4: self.enemy_spritesheet.get_sprite(0, 320, TILESIZE, TILESIZE),
+            5: self.enemy_spritesheet.get_sprite(96, 128, TILESIZE, TILESIZE)
+        }
+
+        self.ground_textures = {
+            1: self.terrain_spritesheet.get_sprite(0, 192, TILESIZE, TILESIZE),
+            2: self.terrain_spritesheet.get_sprite(0, 480, TILESIZE, TILESIZE),
+            3: self.terrain_spritesheet.get_sprite(0, 352, TILESIZE, TILESIZE),
+            4: self.terrain_spritesheet.get_sprite(0, 416, TILESIZE, TILESIZE),
+            5: self.terrain_spritesheet.get_sprite(500, 320, TILESIZE, TILESIZE)
+        }
+
+        self.boss_textures = {
+            1: self.enemy_spritesheet.get_sprite(128, 0, TILESIZE, TILESIZE),
+            2: self.enemy_spritesheet.get_sprite(64, 32, TILESIZE, TILESIZE),
+            3: self.enemy_spritesheet.get_sprite(128, 192, TILESIZE, TILESIZE),
+            4: self.enemy_spritesheet.get_sprite(32, 320, TILESIZE, TILESIZE),
+            5: self.enemy_spritesheet.get_sprite(0, 352, TILESIZE, TILESIZE)
+        }
+
         self.title_screen = TitleScreen(self)
         self.game_over_screen = GameOverScreen(self)
         pygame.mixer.init()
@@ -27,15 +59,14 @@ class Game:
         self.gold = 0
         self.wave = 1
 
-
     def createTilemap(self, tilemap=None):
         if tilemap is None:
             tilemap = level1_map
         for i, row in enumerate(tilemap):
             for j, column in enumerate(row):
-                Ground(self, j, i)
+                Ground(self, j, i, self.ground_textures.get(self.current_level, self.ground_textures[1]))
                 if column == 'B':
-                    Block(self, j, i)
+                    Block(self, j, i, self.block_textures.get(self.current_level, self.block_textures[1]))
                 if column == 'P':
                     self.player = Player(self, j, i)
 
@@ -63,18 +94,47 @@ class Game:
         self.enemies = pygame.sprite.LayeredUpdates()
         self.attacks = pygame.sprite.LayeredUpdates()
 
+        if self.game_state.current_wave == 5:
+            if level_number == 1:
+                self.createTilemap(level1_boss_map)
+            elif level_number == 2:
+                self.createTilemap(level2_boss_map)
+            elif level_number == 3:
+                self.createTilemap(level3_boss_map)
+            elif level_number == 4:
+                self.createTilemap(level4_boss_map)
+            elif level_number == 5:
+                self.createTilemap(level5_boss_map)
+            else:
+                self.createTilemap(level1_boss_map)
+        else:
+            shape_types = ['rectangle', 'circle']
+            random_shape = random.choice(shape_types)
+            random_map = generate_shaped_map(40, 30, shape_type=random_shape)
+            self.createTilemap(random_map)
+
         if level_number == 1:
-            self.createTilemap(level1_map)
             pygame.mixer.music.stop()
             pygame.mixer.music.load('Macky Gee - Obsessive.mp3')
             pygame.mixer.music.play(-1, 37)
         elif level_number == 2:
-            self.createTilemap(level2_map)
             pygame.mixer.music.stop()
             pygame.mixer.music.load('Macky Gee - Moments.mp3')
             pygame.mixer.music.play(-1, 60)
+        elif level_number == 3:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('Macky Gee - Tour.mp3')
+            pygame.mixer.music.play(-1, 61)
+        elif level_number == 4:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('Macky Gee Ft. Stuart Rowe - Aftershock.mp3')
+            pygame.mixer.music.play(-1, 170)
+        elif level_number == 5:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load('Nettspend - Nothing Like U (Official Music Video).mp3')
+            pygame.mixer.music.play(-1, 0)
         else:
-            self.createTilemap(level1_map)
+            level_number == 1
 
         self.spawn_wave(level_number, self.game_state.current_wave)
 
@@ -86,19 +146,79 @@ class Game:
         for enemy in self.enemies:
             enemy.kill()
 
-        if level in level_waves and wave - 1 < len(level_waves[level]):
-            enemy_positions = level_waves[level][wave - 1]
-            for pos in enemy_positions:
-                Enemy(self, pos[0], pos[1])
+        if wave == 5:
+            boss_x = 15
+            boss_y = 8
+            boss_texture = self.boss_textures.get(level, self.boss_textures[1])
+
+            boss = Enemy(self, boss_x, boss_y, boss_texture)
+            boss.max_health = 300
+            boss.health = boss.max_health
+        else:
+            enemy_texture = self.enemy_textures.get(level, self.enemy_textures[1])
+            num_enemies = 4 + wave
+            for _ in range(num_enemies):
+                valid_pos = self.find_valid_position()
+                if valid_pos:
+                    Enemy(self, valid_pos[0], valid_pos[1], enemy_texture)
 
         self.game_state.current_wave = wave
         self.ui.wave = wave
 
+    def is_valid_position(self, x, y):
+        if x < 0 or x >= 40 or y < 0 or y >= 30:
+            return False
+
+        for block in self.blocks:
+            block_x = block.world_x // TILESIZE
+            block_y = block.world_y // TILESIZE
+            if x == block_x and y == block_y:
+                return False
+
+        player_x = self.player.world_x // TILESIZE
+        player_y = self.player.world_y // TILESIZE
+        if abs(x - player_x) < 3 and abs(y - player_y) < 3:
+            return False
+
+        return True
+
+    def find_valid_position(self, start_x=None, start_y=None):
+        center_x = 20
+        center_y = 15
+        radius = min(40, 30) // 2 - 3
+
+        if start_x is None or start_y is None:
+            for _ in range(100):
+                angle = random.uniform(0, 2 * 3.14159)
+                distance = random.uniform(0, radius)
+                x = int(center_x + distance * math.cos(angle))
+                y = int(center_y + distance * math.sin(angle))
+
+                if self.is_valid_position(x, y):
+                    return (x, y)
+        else:
+            for dx in range(-3, 4):
+                for dy in range(-3, 4):
+                    x = start_x + dx
+                    y = start_y + dy
+
+                    distance_from_center = math.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+                    if distance_from_center < radius and self.is_valid_position(x, y):
+                        return (x, y)
+
+        return None
+
     def check_wave_complete(self):
         if len(self.enemies) == 0 and self.playing:
             if self.game_state.current_wave < self.game_state.max_waves_per_level.get(self.game_state.current_level, 1):
-                self.game_state.current_wave += 1
-                self.spawn_wave(self.game_state.current_level, self.game_state.current_wave)
+                next_wave = self.game_state.current_wave + 1
+
+                if next_wave == 5:
+                    self.game_state.current_wave = next_wave
+                    self.load_level(self.game_state.current_level)
+                else:
+                    self.game_state.current_wave = next_wave
+                    self.spawn_wave(self.game_state.current_level, self.game_state.current_wave)
             else:
                 self.game_state.current_level += 1
                 self.game_state.current_wave = 1
@@ -172,7 +292,7 @@ class GameState:
     def __init__(self):
         self.current_level = 1
         self.current_wave = 1
-        self.max_waves_per_level = {1:5, 2:5}
+        self.max_waves_per_level = {1: 5, 2: 5, 3: 5, 4: 5, 5: 5}
         self.gold = 0
         self.max_level_reached = 1
 
